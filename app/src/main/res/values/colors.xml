@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 飞雪TV 设计系统：近黑底 + 蓝紫渐变 + 玻璃卡片 -->
+    <color name="bg">#070A11</color>
+    <color name="panel_bg">#101725</color>
+    <color name="surface">#1A2435</color>
+    <color name="surface_raised">#222E44</color>
+    <color name="accent">#5B8DFF</color>
+    <color name="accent_2">#A06BFF</color>
+    <color name="accent_dim">#22365F</color>
+    <color name="text_primary">#F2F6FF</color>
+    <color name="text_secondary">#96A5BF</color>
+    <color name="text_muted">#6D7C96</color>
+    <color name="divider">#26324A</color>
+    <color name="success">#3DDC97</color>
+    <color name="warning">#FFC46B</color>
+</resources>

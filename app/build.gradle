@@ -1,0 +1,79 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.iptv.tvplayer'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.iptv.tvplayer"
+        minSdk 21
+        targetSdk 34
+        versionCode 10
+        versionName "1.8"
+    }
+
+    signingConfigs {
+        def keystorePropsFile = rootProject.file('keystore/keystore.properties')
+        if (keystorePropsFile.exists()) {
+            def props = new Properties()
+            props.load(new FileInputStream(keystorePropsFile))
+            release {
+                storeFile rootProject.file(props['storeFile'])
+                storePassword props['storePassword']
+                keyAlias props['keyAlias']
+                keyPassword props['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            def rel = signingConfigs.findByName('release')
+            if (rel != null) signingConfig rel
+        }
+    }
+
+    // 统一输出文件名：release -> FlysnowTV.apk，debug -> FlysnowTV-debug.apk
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def base = 'FlysnowTV'
+            outputFileName = variant.buildType.name == 'release'
+                    ? "${base}.apk"
+                    : "${base}-${variant.buildType.name}.apk"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+        encoding = "UTF-8"
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+
+    implementation 'io.coil-kt:coil:2.6.0'
+    // 仅用于把局域网配置页地址编码成二维码（TV 端是生成方，不需要相机权限）
+    implementation 'com.google.zxing:core:3.5.3'
+
+    implementation 'androidx.media3:media3-exoplayer:1.4.1'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.4.1'
+    implementation 'androidx.media3:media3-ui:1.4.1'
+}

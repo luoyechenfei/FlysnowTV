@@ -1,0 +1,977 @@
+package com.iptv.tvplayer
+
+import android.app.AlertDialog
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.graphics.Color
+import android.os.Build
+import android.os.Bundle
+import android.view.KeyEvent
+import android.view.View
+import android.view.WindowManager
+import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import android.net.Uri
+import androidx.activity.result.contract.ActivityResultContracts
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.ArrayList
+import java.util.Date
+import java.util.Locale
+
+/**
+ * 遥控器可直接进入的设置中心：手机扫码配置、第三方接口（GET/POST/Token）、
+ * XMLTV 节目单、卡片预览与收藏、画质、播放器、台标、关于。
+ * 设置即时写入 Prefs，MainActivity 回到前台时按 version 变化重新应用并刷新。
+ */
+class SettingsActivity : AppCompatActivity() {
+
+    private class Row(
+        val key: String,
+        val view: View,
+        var index: Int,
+        val labels: List<String>,
+        val hints: List<String>,
+        val setter: (Int) -> Unit
+    )
+
+    private lateinit var prefs: Prefs
+    private lateinit var repository: PlaylistRepository
+    private lateinit var tokens: TokenManager
+    private lateinit var epg: EpgRepository
+    private lateinit var container: LinearLayout
+    private lateinit var sourceContainer: LinearLayout
+    private val rows = ArrayList<Row>()
+    private var templateRow: View? = null
+    private var epgStatusRow: View? = null
+    private var tokenStatusRow: View? = null
+    private var libraryRow: View? = null
+    private var hiddenRow: View? = null
+
+    /** 导入订阅备份：用系统文档选择器挑一个 .json 文件（支持 U 盘 / 下载目录 / 网络存储） */
+    private val importLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) handleBackupUri(uri) else toast("未选择文件")
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_settings)
+        prefs = Prefs(this)
+        repository = PlaylistRepository(this)
+        tokens = repository.tokens
+        epg = EpgRepository(this)
+        container = findViewById(R.id.settingsContainer)
+        buildUi()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::sourceContainer.isInitialized) {
+            refreshSources()
+            refreshStatusRows()
+        }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        val key = currentFocus?.tag as? String
+        if (key != null && rows.any { it.key == key }) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    step(key, -1)
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    step(key, 1)
+                    return true
+                }
+            }
+        }
+        if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_SETTINGS) {
+            finish()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    // ------------------------------------------------------------ 界面搭建
+
+    private fun buildUi() {
+        container.removeAllViews()
+        rows.clear()
+        templateRow = null
+        epgStatusRow = null
+        tokenStatusRow = null
+        libraryRow = null
+
+        section("① 一键导入订阅链接　·　最常用")
+        actionRow("粘贴链接，一键导入", "推荐 · 一条或多条订阅地址，自动识别格式") { showQuickImportDialog() }
+        actionRow("从剪贴板一键导入", "手机上复制链接，在盒子上按此行即可（需输入法支持粘贴）") {
+            quickImportFromClipboard()
+        }
+
+        section("手机扫码配置　·　推荐")
+        actionRow("打开二维码 / 启动配置页", "手机扫码 → 网页表单 → 一键保存到电视") {
+            startActivity(Intent(this, QrConfigActivity::class.java))
+        }
+
+        section("第三方接口 / 播放源导入")
+        actionRow("添加接口（URL）", "地址、请求方式、POST 请求体、请求头、Token 与字段映射；已有订阅点进去可编辑") { showSourceEditor() }
+        actionRow("导入 m3u 文本", "整段粘贴列表内容，保存到 App 内部，不需要服务器") { showImportTextDialog() }
+        actionRow("从本地文件导入", "填写 U 盘 / 下载目录里的 m3u 绝对路径") { showLocalFileDialog() }
+        actionRow("导出订阅备份", "把所有订阅存成一个 JSON，可换机 / 分享 / 留底") { exportBackup() }
+        actionRow("导入订阅备份", "从 U 盘 / 下载目录选一个备份 JSON 恢复") { importBackup() }
+        actionRow("刷新全部播放源", "返回频道墙时重新拉取所有接口") {
+            prefs.notifySourceChanged()
+            toast("返回频道墙后自动刷新")
+        }
+        sourceContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        container.addView(sourceContainer)
+        refreshSources()
+
+        section("Token 定时刷新")
+        optionRow(
+            "tokenInterval", "全局刷新周期",
+            Prefs.TOKEN_LABELS, Prefs.TOKEN_HINTS, prefs.tokenIntervalIndex
+        ) { prefs.tokenIntervalIndex = it }
+        actionRow("立即刷新 Token", "强制重新获取一次，并更新视频播放请求头") { refreshTokenNow() }
+        tokenStatusRow = actionRow("Token 状态", tokens.status()) { refreshTokenNow() }
+
+        section("XMLTV 节目单")
+        actionRow("XMLTV 地址", "当前：${prefs.epgUrl.ifBlank { "（未填写）" }}") { showEpgUrlDialog() }
+        optionRow(
+            "epgInterval", "自动刷新间隔",
+            Prefs.EPG_LABELS, Prefs.EPG_HINTS, prefs.epgIntervalIndex
+        ) { prefs.epgIntervalIndex = it }
+        actionRow("立即刷新节目单", "重新拉取并解析 XMLTV") { refreshEpgNow() }
+        epgStatusRow = actionRow("节目单状态", epg.status()) { refreshEpgNow() }
+
+        section("性能 / 盒子流畅度")
+        optionRow(
+            "preview", "卡片低码率预览",
+            Prefs.PREVIEW_LABELS, Prefs.PREVIEW_HINTS,
+            if (prefs.previewEnabled) 0 else 1
+        ) { prefs.previewEnabled = it == 0 }
+        optionRow(
+            "background", "返回频道墙后台续播",
+            Prefs.BACKGROUND_LABELS, Prefs.BACKGROUND_HINTS,
+            if (prefs.backgroundPlay) 1 else 0
+        ) { prefs.backgroundPlay = it == 1 }
+
+        section("多线路 / 自动切换")
+        optionRow(
+            "autoSwitch", "线路失败自动切换",
+            Prefs.AUTO_SWITCH_LABELS, Prefs.AUTO_SWITCH_HINTS,
+            if (prefs.autoSwitchLine) 0 else 1
+        ) { prefs.autoSwitchLine = it == 0 }
+        actionRow("多线路状态", multiLineSummary()) { toast(multiLineSummary()) }
+
+        section("EPG 时间轴 / 节目预约")
+        actionRow("打开节目时间轴", "按 GUIDE 也可以直接打开") { openGrid() }
+        actionRow("节目预约", reservationSummary()) { showReservationDialog() }
+
+        section("卡片预览 / 收藏夹")
+        libraryRow = actionRow("收藏夹 / 最近观看", librarySummary()) { showLibraryDialog() }
+
+        section("画质 / 分辨率")
+        optionRow(
+            "quality", "画质分辨率",
+            Prefs.QUALITY_LABELS, Prefs.QUALITY_HINTS, prefs.quality
+        ) { prefs.quality = it }
+
+        section("播放器 / 内置加速")
+        optionRow(
+            "engine", "播放引擎",
+            Prefs.ENGINE_LABELS, Prefs.ENGINE_HINTS, prefs.engine
+        ) { prefs.engine = it }
+
+        section("台标 LOGO 获取")
+        optionRow(
+            "logo", "台标来源",
+            Prefs.LOGO_LABELS, Prefs.LOGO_HINTS, prefs.logoMode
+        ) { prefs.logoMode = it }
+        templateRow = actionRow(
+            "台标地址模板", "当前：${prefs.logoTemplate.ifBlank { "（未填写）" }}"
+        ) { showTemplateDialog() }
+
+        section("频道封面 / 不可用源过滤")
+        optionRow(
+            "cover", "频道封面显示",
+            Prefs.COVER_LABELS, Prefs.COVER_HINTS, prefs.coverMode
+        ) {
+            // 封面模式只决定静态封面，不再联动改写预览开关：
+            // 以前选「台标/首字母」会把 preview 写死成 false，导致悬停永远看不到实时画面
+            prefs.coverMode = it
+        }
+        optionRow(
+            "hideFailed", "自动隐藏播放失败的频道",
+            listOf("开启（失败 3 次后隐藏）", "关闭（保留全部）"),
+            listOf(
+                "连续播放失败的频道（死链 / 测试源）自动从墙面与筛选中移除，避免一开满屏黑屏",
+                "任何频道都不隐藏，失败时只提示错误"
+            ),
+            if (prefs.hideFailedChannels) 0 else 1
+        ) { prefs.hideFailedChannels = it == 0 }
+        hiddenRow = actionRow(
+            "已隐藏频道", hiddenSummary()
+        ) {
+            prefs.clearHiddenChannels()
+            refreshHiddenRow()
+            toast("已恢复全部被隐藏的频道")
+        }
+
+        section("播放诊断 / 盒子排障")
+        actionRow("查看诊断日志", "设备 / TLS / 接口 / 播放错误，随时可查") { showDiagnosticsDialog() }
+        actionRow("生成日志文件", "导出 .txt 到 Download 目录，可 adb pull 取回排查") { exportDiagnostics() }
+        actionRow(
+            "设备自动分级",
+            DeviceProfile.summary(this).lineSequence().firstOrNull().orEmpty()
+        ) { showDiagnosticsDialog() }
+        optionRow(
+            "externalFallback", "解码失败自动换播放器",
+            listOf("开启（老盒子救急）", "关闭"),
+            listOf(
+                "内置解码连续失败 2 次后，自动尝试盒子上已装的 VLC / MX / 系统播放器",
+                "只显示错误提示，不自动跳转外部应用"
+            ),
+            if (prefs.externalFallback) 0 else 1
+        ) { prefs.externalFallback = it == 0 }
+
+        section("关于")
+        actionRow("关于 飞雪TV", "版本号与版权信息") { showAboutDialog() }
+
+        container.post {
+            for (i in 0 until container.childCount) {
+                val v = container.getChildAt(i)
+                if (v.isFocusable && v.visibility == View.VISIBLE) {
+                    v.requestFocus()
+                    break
+                }
+            }
+        }
+    }
+
+    private fun section(title: String) {
+        val tv = TextView(this).apply {
+            text = title
+            setTextColor(Color.parseColor("#8FB2FF"))
+            textSize = 14f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            lp.topMargin = dp(20)
+            lp.bottomMargin = dp(6)
+            layoutParams = lp
+        }
+        container.addView(tv)
+    }
+
+    private fun note(text: String) {
+        val tv = TextView(this).apply {
+            this.text = text
+            setTextColor(Color.parseColor("#93A2BC"))
+            textSize = 11f
+            setLineSpacing(dp(3).toFloat(), 1f)
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            lp.bottomMargin = dp(8)
+            layoutParams = lp
+        }
+        container.addView(tv)
+    }
+
+    private fun inflateRow(): View =
+        layoutInflater.inflate(R.layout.item_setting_row, container, false)
+
+    private fun actionRow(title: String, desc: String, onClick: () -> Unit): View {
+        val row = inflateRow()
+        row.findViewById<TextView>(R.id.settingTitle).text = title
+        row.findViewById<TextView>(R.id.settingDesc).text = desc
+        row.findViewById<TextView>(R.id.settingValue).text = "打开"
+        row.setOnClickListener { onClick() }
+        container.addView(row)
+        return row
+    }
+
+    private fun optionRow(
+        key: String,
+        title: String,
+        labels: List<String>,
+        hints: List<String>,
+        current: Int,
+        setter: (Int) -> Unit
+    ) {
+        val row = inflateRow()
+        row.tag = key
+        row.findViewById<TextView>(R.id.settingTitle).text = title
+        row.findViewById<TextView>(R.id.settingValue).text = labels[current]
+        row.findViewById<TextView>(R.id.settingDesc).text = hints.getOrElse(current) { "" }
+        rows.add(Row(key, row, current, labels, hints, setter))
+        row.setOnClickListener { step(key, 1) }
+        container.addView(row)
+    }
+
+    private fun step(key: String, delta: Int) {
+        val r = rows.firstOrNull { it.key == key } ?: return
+        val size = r.labels.size
+        r.index = ((r.index + delta) % size + size) % size
+        r.setter(r.index)
+        r.view.findViewById<TextView>(R.id.settingValue).text = r.labels[r.index]
+        r.view.findViewById<TextView>(R.id.settingDesc).text = r.hints.getOrElse(r.index) { "" }
+        toast("已设为：${r.labels[r.index]}")
+    }
+
+    // ------------------------------------------------------------ 接口管理
+
+    private fun refreshSources() {
+        sourceContainer.removeAllViews()
+        val list = repository.sources
+        if (list.isEmpty()) {
+            val tv = TextView(this).apply {
+                text = "尚未添加接口　·　最上方「粘贴链接，一键导入」填一个聚合订阅地址即可开始"
+                setTextColor(Color.parseColor("#93A2BC"))
+                textSize = 12f
+                setPadding(dp(4), dp(6), dp(4), dp(14))
+            }
+            sourceContainer.addView(tv)
+            return
+        }
+        for ((index, config) in list.withIndex()) {
+            val tv = layoutInflater.inflate(
+                R.layout.item_source_row, sourceContainer, false
+            ) as TextView
+            val mark = if (config.enabled) "✔" else "✕"
+            tv.text = "${index + 1}. $mark  ${config.describe()}"
+            tv.alpha = if (config.enabled) 1f else 0.45f
+            tv.background = ContextCompat.getDrawable(this, R.drawable.bg_source_row)
+            tv.isFocusable = true
+            tv.isClickable = true
+            tv.setOnClickListener { manageSourceDialog(config) }
+            sourceContainer.addView(tv)
+        }
+        val enabledCount = list.count { it.enabled }
+        val tip = TextView(this).apply {
+            text = "点某个订阅可：编辑 / 启用·停用 / 上下移优先级 / 重新校验 / 删除　·　共 ${list.size} 个（已启用 $enabledCount）"
+            setTextColor(Color.parseColor("#93A2BC"))
+            textSize = 11f
+            setPadding(dp(4), dp(8), dp(4), dp(6))
+        }
+        sourceContainer.addView(tip)
+    }
+
+    private fun confirmDelete(config: SourceConfig) {
+        val message = buildString {
+            append(config.url).append("\n\n")
+            append("请求方式：").append(if (config.isPost) "POST" else "GET").append("\n")
+            if (config.body.isNotBlank()) append("请求体：").append(config.body).append("\n")
+            if (config.headersText.isNotBlank()) append("请求头：").append(config.headersText).append("\n")
+            if (config.fieldsText.isNotBlank()) append("字段映射：").append(config.fieldsText).append("\n")
+            if (config.hasToken) {
+                append("Token 接口：").append(config.tokenUrl).append("\n")
+                append("Token 路径：").append(config.tokenPath.ifBlank { "（整段响应）" }).append("\n")
+                append("刷新周期：").append(
+                    if (config.refreshMinutes > 0) "${config.refreshMinutes} 分钟" else "跟随全局"
+                )
+            }
+        }
+        AlertDialog.Builder(this)
+            .setTitle("接口配置")
+            .setMessage(message)
+            .setPositiveButton(R.string.action_delete) { _, _ ->
+                repository.removeSource(config.id)
+                prefs.notifySourceChanged()
+                refreshSources()
+                toast("已删除接口")
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    /** 点击某个订阅后弹出的管理菜单：编辑 / 启用停用 / 调优先级 / 校验 / 删除 */
+    private fun manageSourceDialog(config: SourceConfig) {
+        val options = arrayOf(
+            "编辑（地址与参数）",
+            if (config.enabled) "停用此订阅" else "启用此订阅",
+            "↑ 上移（提高合并优先级）",
+            "↓ 下移（降低合并优先级）",
+            "重新校验此订阅",
+            getString(R.string.action_delete)
+        )
+        AlertDialog.Builder(this)
+            .setTitle(config.url)
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> showSourceEditor(config)
+                    1 -> {
+                        repository.updateSource(config.copy(enabled = !config.enabled))
+                        prefs.notifySourceChanged()
+                        refreshSources()
+                        toast(if (!config.enabled) "已启用：${config.label()}" else "已停用：${config.label()}")
+                    }
+                    2 -> moveSource(config, up = true)
+                    3 -> moveSource(config, up = false)
+                    4 -> recheckSource(config)
+                    5 -> confirmDelete(config)
+                }
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun moveSource(config: SourceConfig, up: Boolean) {
+        if (repository.moveSource(config.id, up)) {
+            prefs.notifySourceChanged()
+            refreshSources()
+            toast(if (up) "已上移" else "已下移")
+        } else {
+            toast(if (up) "已经是最前" else "已经是最后")
+        }
+    }
+
+    /** 单独校验一个订阅是否还能解析出频道 */
+    private fun recheckSource(config: SourceConfig) {
+        toast("正在校验 ${config.label()}…")
+        Thread {
+            val result = runCatching { repository.probe(config) }.getOrDefault(0 to "校验异常")
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                val (count, detail) = result
+                val msg = if (count > 0) {
+                    "解析到 $count 个频道\n\n$detail"
+                } else {
+                    "校验未通过：\n$detail"
+                }
+                AlertDialog.Builder(this@SettingsActivity)
+                    .setTitle("校验结果 · ${config.label()}")
+                    .setMessage(msg)
+                    .setPositiveButton(R.string.action_close, null)
+                    .show()
+            }
+        }.start()
+    }
+
+    // ------------------------------------------------------------ 一键导入订阅链接
+
+    private fun showQuickImportDialog() {
+        val c = layoutInflater.inflate(R.layout.dialog_quick_import, null)
+        val input = c.findViewById<EditText>(R.id.quickImportUrls)
+        val headersInput = c.findViewById<EditText>(R.id.quickImportHeaders)
+        val replaceBox = c.findViewById<CheckBox>(R.id.quickImportReplace)
+
+        // 遥控器打字麻烦：剪贴板里若有链接，打开时自动填好
+        val clip = clipboardText()
+        if (clip != null && SubscriptionImporter.normalize(clip).isNotEmpty()) {
+            input.setText(clip.trim())
+            input.setSelection(clip.trim().length)
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("一键导入订阅链接")
+            .setView(c)
+            .setPositiveButton("立即导入") { _, _ ->
+                runQuickImport(
+                    input.text.toString(),
+                    replaceBox.isChecked,
+                    headersInput.text.toString()
+                )
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .create()
+        dialog.setOnShowListener {
+            input.requestFocus()
+            dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        }
+        dialog.show()
+    }
+
+    private fun clipboardText(): String? = runCatching {
+        val manager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        manager?.primaryClip?.getItemAt(0)?.text?.toString()
+    }.getOrNull()
+
+    private fun quickImportFromClipboard() {
+        val text = clipboardText()
+        if (text.isNullOrBlank()) {
+            toast("剪贴板是空的，请改用「粘贴链接，一键导入」")
+            return
+        }
+        runQuickImport(text, false)
+    }
+
+    private fun runQuickImport(raw: String, replace: Boolean, headers: String = "") {
+        if (raw.isBlank()) {
+            toast("请先粘贴订阅链接")
+            return
+        }
+        toast("正在拉取并校验链接…")
+        Thread {
+            val items = SubscriptionImporter.import(this, repository, raw, replace, headers)
+            val summary = SubscriptionImporter.summary(items)
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                refreshSources()
+                AlertDialog.Builder(this)
+                    .setTitle("导入结果")
+                    .setMessage(summary)
+                    .setPositiveButton("完成", null)
+                    .show()
+            }
+        }.start()
+    }
+
+    private fun showDiagnosticsDialog() {
+        val text = Diagnostics.device() + "\n\n" + DeviceProfile.summary(this) +
+            "\n\n—— 最近记录 ——\n\n" + Diagnostics.read(this)
+        AlertDialog.Builder(this)
+            .setTitle("播放诊断")
+            .setMessage(text)
+            .setPositiveButton("关闭", null)
+            .setNegativeButton("清空日志") { _, _ ->
+                Diagnostics.clear(this)
+                toast("诊断日志已清空")
+            }
+            .show()
+    }
+
+    /** 生成一份可直接取回的排障日志文件 */
+    private fun exportDiagnostics() {
+        val path = Diagnostics.export(this, repository)
+        AlertDialog.Builder(this)
+            .setTitle("日志文件已生成")
+            .setMessage(
+                "$path\n\n" +
+                    "内容：设备 / TLS / 接口配置 / 每次拉取结果 / 播放错误 / 崩溃堆栈\n\n" +
+                    "取回方式：\nadb pull \"$path\"\n" +
+                    "或在盒子文件管理器打开 Android/data/com.iptv.tvplayer/files/Download/"
+            )
+            .setPositiveButton("完成", null)
+            .show()
+    }
+
+    private fun showSourceEditor(existing: SourceConfig? = null) {
+        val c = layoutInflater.inflate(R.layout.dialog_add_source, null)
+        val urlInput = c.findViewById<EditText>(R.id.apiUrl)
+        val methodInput = c.findViewById<EditText>(R.id.apiMethod)
+        val headersInput = c.findViewById<EditText>(R.id.apiHeaders)
+        val fieldsInput = c.findViewById<EditText>(R.id.apiFields)
+        val bodyInput = c.findViewById<EditText>(R.id.apiBody)
+        val tokenUrlInput = c.findViewById<EditText>(R.id.apiTokenUrl)
+        val tokenPathInput = c.findViewById<EditText>(R.id.apiTokenPath)
+        val refreshInput = c.findViewById<EditText>(R.id.apiRefresh)
+
+        if (existing != null) {
+            urlInput.setText(existing.url)
+            methodInput.setText(existing.method)
+            headersInput.setText(existing.headersText)
+            fieldsInput.setText(existing.fieldsText)
+            bodyInput.setText(existing.body)
+            tokenUrlInput.setText(existing.tokenUrl)
+            tokenPathInput.setText(existing.tokenPath)
+            refreshInput.setText(existing.refreshMinutes.toString())
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(if (existing != null) "编辑接口" else getString(R.string.add_source_title))
+            .setView(c)
+            .setPositiveButton(if (existing != null) "保存修改" else getString(R.string.action_load)) { _, _ ->
+                saveSource(
+                    existing = existing,
+                    url = urlInput.text.toString(),
+                    headers = headersInput.text.toString(),
+                    fields = fieldsInput.text.toString(),
+                    method = methodInput.text.toString(),
+                    body = bodyInput.text.toString(),
+                    tokenUrl = tokenUrlInput.text.toString(),
+                    tokenPath = tokenPathInput.text.toString(),
+                    refresh = refreshInput.text.toString()
+                )
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .create()
+        dialog.setOnShowListener {
+            urlInput.requestFocus()
+            dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        }
+        dialog.show()
+    }
+
+    private fun saveSource(
+        existing: SourceConfig?,
+        url: String,
+        headers: String,
+        fields: String,
+        method: String,
+        body: String,
+        tokenUrl: String,
+        tokenPath: String,
+        refresh: String
+    ) {
+        val address = url.trim()
+        if (address.isEmpty()) {
+            toast("请输入接口地址")
+            return
+        }
+        val valid = address.startsWith("http://") || address.startsWith("https://") ||
+            address.startsWith("file://") || address.startsWith("/")
+        if (!valid) {
+            toast("地址需以 http:// 或 https:// 开头")
+            return
+        }
+        val normalizedMethod = method.trim().uppercase().takeIf {
+            it == "GET" || it == "POST"
+        } ?: "GET"
+        val cfg = if (existing != null) {
+            existing.copy(
+                url = address,
+                headersText = headers.trim(),
+                fieldsText = fields.trim(),
+                method = normalizedMethod,
+                body = body.trim(),
+                tokenUrl = tokenUrl.trim(),
+                tokenPath = tokenPath.trim(),
+                refreshMinutes = refresh.trim().toIntOrNull()?.coerceAtLeast(0) ?: 0
+            )
+        } else {
+            SourceConfig(
+                url = address,
+                headersText = headers.trim(),
+                fieldsText = fields.trim(),
+                method = normalizedMethod,
+                body = body.trim(),
+                tokenUrl = tokenUrl.trim(),
+                tokenPath = tokenPath.trim(),
+                refreshMinutes = refresh.trim().toIntOrNull()?.coerceAtLeast(0) ?: 0
+            )
+        }
+        if (existing != null) repository.updateSource(cfg) else repository.addSource(cfg)
+        afterSourceAdded(if (existing != null) "已保存修改" else "已添加接口，返回频道墙自动加载")
+    }
+
+    private fun showImportTextDialog() {
+        val c = layoutInflater.inflate(R.layout.dialog_import_text, null)
+        val input = c.findViewById<EditText>(R.id.importText)
+        AlertDialog.Builder(this)
+            .setTitle("导入 m3u 文本")
+            .setView(c)
+            .setPositiveButton("导入") { _, _ ->
+                val text = input.text.toString()
+                if (!text.contains("#EXTINF", true) && !text.trim().startsWith("http", true)) {
+                    toast("内容不像 m3u 列表")
+                } else {
+                    val file = File(filesDir, "imported_playlist.m3u")
+                    if (runCatching { file.writeText(text) }.isFailure) {
+                        toast("保存列表失败")
+                    } else {
+                        repository.addSource(SourceConfig(url = file.absolutePath))
+                        afterSourceAdded("已导入 ${text.lines().size} 行")
+                    }
+                }
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun showLocalFileDialog() {
+        showTextInput(
+            "从本地文件导入",
+            "填绝对路径，例如 /storage/emulated/0/Download/list.m3u；盒子需允许 App 读存储。",
+            ""
+        ) { value ->
+            val path = value.trim()
+            if (path.isEmpty()) {
+                toast("请输入文件路径")
+            } else {
+                repository.addSource(SourceConfig(url = path))
+                afterSourceAdded("已添加本地文件源")
+            }
+        }
+    }
+
+    private fun afterSourceAdded(message: String) {
+        prefs.notifySourceChanged()
+        refreshSources()
+        toast(message)
+    }
+
+    // ------------------------------------------------------------ 订阅备份（导出 / 导入）
+
+    /** 导出：生成订阅备份 JSON 到 App 专属 Download 目录，并提示取回方式 */
+    private fun exportBackup() {
+        val json = BackupHelper.toBackupJson(repository)
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val file = BackupHelper.writeToDownloads(this, "FlysnowTV_sources_$stamp.json", json)
+        AlertDialog.Builder(this)
+            .setTitle("订阅备份已生成")
+            .setMessage(
+                "${file.absolutePath}\n\n共 ${repository.sources.size} 个订阅。\n\n取回方式：\n" +
+                    "adb pull \"${file.absolutePath}\"\n" +
+                    "或把文件拷到 U 盘 / 网络存储，再到另一台盒子的设置里「导入订阅备份」。\n\n" +
+                    "也可以直接用手机配置页（扫码）的「下载订阅备份」按钮获取。"
+            )
+            .setPositiveButton("完成", null)
+            .show()
+    }
+
+    /** 导入：拉起系统文档选择器，挑一个 .json 备份文件 */
+    private fun importBackup() {
+        importLauncher.launch(arrayOf("application/json", "*/*"))
+    }
+
+    private fun handleBackupUri(uri: Uri) {
+        val text = runCatching {
+            contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() }
+        }.getOrNull()
+        if (text.isNullOrBlank()) {
+            toast("无法读取该文件")
+            return
+        }
+        val list = BackupHelper.fromBackupJson(text)
+        if (list == null) {
+            toast("不是有效的飞雪TV订阅备份")
+            return
+        }
+        if (list.isEmpty()) {
+            toast("备份里没有可用订阅")
+            return
+        }
+        confirmImport(list)
+    }
+
+    /** 导入前让用户选「合并」还是「替换全部」 */
+    private fun confirmImport(list: List<SourceConfig>) {
+        val exists = repository.sources.map { it.url }.toSet()
+        val toAdd = list.count { !exists.contains(it.url) }
+        val duplicate = list.size - toAdd
+        AlertDialog.Builder(this)
+            .setTitle("导入订阅备份")
+            .setMessage(
+                "备份含 ${list.size} 个订阅。\n\n" +
+                    "合并导入：新增 $toAdd 个、跳过 $duplicate 个重复（按地址判断），不影响现有其它订阅。\n" +
+                    "替换全部：用备份里的订阅覆盖当前所有订阅。"
+            )
+            .setPositiveButton("合并导入") { _, _ ->
+                var n = 0
+                for (c in list) {
+                    if (!exists.contains(c.url)) {
+                        repository.addSource(c)
+                        n++
+                    }
+                }
+                afterSourceAdded("已合并导入 $n 个订阅")
+            }
+            .setNeutralButton("替换全部") { _, _ ->
+                repository.sources = ArrayList(list)
+                afterSourceAdded("已替换为 ${list.size} 个订阅")
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+
+    // ------------------------------------------------------------ Token / EPG
+
+    private fun refreshTokenNow() {
+        toast("正在刷新 Token…")
+        Thread {
+            val ok = tokens.forceRefresh(repository.sources, prefs.tokenRefreshMinutes)
+            runOnUiThread {
+                refreshStatusRows()
+                toast(if (ok) "Token 已刷新" else "刷新失败：${tokens.lastError ?: "未配置 Token 接口"}")
+            }
+        }.start()
+    }
+
+    private fun refreshEpgNow() {
+        toast("正在加载 XMLTV 节目单…")
+        Thread {
+            val ok = epg.load(force = true)
+            runOnUiThread {
+                refreshStatusRows()
+                toast(if (ok) "已加载 ${epg.programmeCount} 条节目" else "加载失败：${epg.lastError ?: "无数据"}")
+            }
+        }.start()
+    }
+
+    private fun refreshStatusRows() {
+        epgStatusRow?.findViewById<TextView>(R.id.settingDesc)?.text = epg.status()
+        tokenStatusRow?.findViewById<TextView>(R.id.settingDesc)?.text = tokens.status()
+        libraryRow?.findViewById<TextView>(R.id.settingDesc)?.text = librarySummary()
+    }
+
+    private fun showEpgUrlDialog() {
+        showTextInput(
+            "XMLTV 节目单地址",
+            "标准 XMLTV 的 .xml 或 .xml.gz 地址；支持 {token} 与播放源请求头。",
+            prefs.epgUrl
+        ) { value ->
+            prefs.epgUrl = value
+            refreshStatusRows()
+            toast("XMLTV 地址已保存，将自动加载")
+            Thread { epg.load(force = true); runOnUiThread { refreshStatusRows() } }.start()
+        }
+    }
+
+    // ------------------------------------------------------------ 收藏夹
+
+    private fun librarySummary(): String =
+        "已收藏 ${prefs.favoriteKeys.size} 个　·　最近观看 ${prefs.recentKeys.size} 个　（点此清空）"
+
+    private fun multiLineSummary(): String =
+        "同名 / 同 tvg-id 的源自动合并成多线路，失败自动切换　·　点此查看"
+
+    private fun reservationSummary(): String =
+        "已预约 ${prefs.reservations.size} 个节目　·　点此查看 / 清空"
+
+    private fun hiddenSummary(): String =
+        "已隐藏 ${prefs.hiddenChannels.size} 个（连续播放失败）　·　点此恢复全部"
+
+    private fun refreshHiddenRow() {
+        hiddenRow?.findViewById<TextView>(R.id.settingDesc)?.text = hiddenSummary()
+    }
+
+    private fun openGrid() {
+        EpgGridActivity.pendingChannels = emptyList()
+        EpgGridActivity.pendingIndex = 0
+        EpgGridActivity.pendingEpg = epg
+        startActivity(Intent(this, EpgGridActivity::class.java))
+    }
+
+    private fun showReservationDialog() {
+        val list = prefs.reservations.toList()
+        val message = if (list.isEmpty()) {
+            "还没有预约节目。播放时按 GUIDE 打开节目时间轴，选中节目按 OK 即可预约。"
+        } else {
+            list.take(12).joinToString("\n") { key ->
+                val start = key.substringAfterLast('|').toLongOrNull() ?: 0L
+                "${Catchup.clock(start)}　${key.substringBeforeLast('|')}"
+            } + if (list.size > 12) "\n… 等 ${list.size} 个" else ""
+        }
+        AlertDialog.Builder(this)
+            .setTitle("节目预约")
+            .setMessage(message)
+            .setPositiveButton("清空全部预约") { _, _ ->
+                prefs.clearReservations()
+                toast("已清空预约")
+            }
+            .setNegativeButton(R.string.action_close, null)
+            .show()
+    }
+
+    private fun showLibraryDialog() {
+        val favorites = prefs.favoriteKeys.toList()
+        val message = buildString {
+            append("已收藏 ").append(favorites.size).append(" 个频道\n")
+            append("最近观看 ").append(prefs.recentKeys.size).append(" 个频道\n\n")
+            if (favorites.isEmpty()) {
+                append("在频道墙上长按 OK 即可收藏；收藏后分组条会出现「★ 收藏」。")
+            } else {
+                append("收藏标识（tvg-id / 频道名）：\n")
+                append(favorites.take(12).joinToString("\n"))
+                if (favorites.size > 12) append("\n… 等 ${favorites.size} 个")
+            }
+        }
+        AlertDialog.Builder(this)
+            .setTitle("收藏夹 / 最近观看")
+            .setMessage(message)
+            .setPositiveButton("清空收藏") { _, _ ->
+                prefs.clearFavorites()
+                prefs.notifySourceChanged()
+                refreshStatusRows()
+                toast("收藏夹已清空")
+            }
+            .setNeutralButton("清空最近") { _, _ ->
+                prefs.clearRecent()
+                prefs.notifySourceChanged()
+                refreshStatusRows()
+                toast("最近观看已清空")
+            }
+            .setNegativeButton(R.string.action_close, null)
+            .show()
+    }
+
+    // ------------------------------------------------------------ 输入弹窗
+
+    private fun showTemplateDialog() {
+        showTextInput(
+            "台标地址模板",
+            "支持 {num} / {short} / {name}，例如 https://example.com/logo/{short}.png",
+            prefs.logoTemplate
+        ) { value ->
+            prefs.logoTemplate = value
+            templateRow?.findViewById<TextView>(R.id.settingDesc)?.text =
+                "当前：${value.ifBlank { "（未填写）" }}"
+            toast("台标模板已保存")
+        }
+    }
+
+    private fun showTextInput(title: String, hint: String, initial: String, onOk: (String) -> Unit) {
+        val c = layoutInflater.inflate(R.layout.dialog_text_input, null)
+        c.findViewById<TextView>(R.id.inputHint).text = hint
+        val input = c.findViewById<EditText>(R.id.inputValue)
+        input.setText(initial)
+        input.setSelection(input.text.length)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(c)
+            .setPositiveButton("保存") { _, _ -> onOk(input.text.toString()) }
+            .setNegativeButton(R.string.action_cancel, null)
+            .create()
+        dialog.setOnShowListener {
+            input.requestFocus()
+            dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        }
+        dialog.show()
+    }
+
+    private fun showAboutDialog() {
+        val info = runCatching { packageManager.getPackageInfo(packageName, 0) }.getOrNull()
+        val version = info?.versionName ?: "1.3"
+        val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info?.longVersionCode ?: 4L
+        } else {
+            @Suppress("DEPRECATION")
+            info?.versionCode?.toLong() ?: 4L
+        }
+        val message = buildString {
+            append("飞雪TV　·　Android TV 直播播放器\n")
+            append("版本 ").append(version).append("（versionCode ").append(code).append("）\n\n")
+
+            append("【版权与授权】\n")
+            append("· 本应用不内置、不分发任何电视台直播流地址。\n")
+            append("· 所有频道均来自使用者自行添加的订阅源，请确认你有权使用。\n")
+            append("· 播放源、接口地址、Token 与台标图片均由使用者自行提供。\n")
+            append("· 仅供个人自用测试，请勿分发或公开提供流地址；商业使用需另行取得授权。\n\n")
+
+            append("【构建信息】\n")
+            append("Kotlin 1.9.24 · AGP 8.5.2 · Gradle 8.7\n")
+            append("Media3 / ExoPlayer 1.4.1 · Coil 2.6.0 · ZXing 3.5.3\n")
+            append("compileSdk 34 · minSdk 21 · targetSdk 34")
+        }
+        AlertDialog.Builder(this)
+            .setTitle("关于 飞雪TV")
+            .setMessage(message)
+            .setPositiveButton("关闭", null)
+            .show()
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun toast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+}

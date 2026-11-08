@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_wall"
+    android:orientation="vertical"
+    android:paddingStart="36dp"
+    android:paddingTop="24dp"
+    android:paddingEnd="36dp"
+    android:paddingBottom="16dp">
+
+    <TextView
+        android:id="@+id/gridTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="节目时间轴"
+        android:textColor="@color/text_primary"
+        android:textSize="25sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/gridSubtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="↑↓ 选频道　←→ 选节目　OK 预约/取消　播放键 立即播放　BACK 返回"
+        android:textColor="#8FB2FF"
+        android:textSize="11.5sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="16dp"
+        android:layout_weight="1"
+        android:orientation="horizontal">
+
+        <!-- 左侧固定频道列，不随横向滚动 -->
+        <LinearLayout
+            android:id="@+id/channelColumn"
+            android:layout_width="156dp"
+            android:layout_height="match_parent"
+            android:orientation="vertical" />
+
+        <HorizontalScrollView
+            android:id="@+id/gridScroller"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:fillViewport="false"
+            android:overScrollMode="never"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/gridContent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </HorizontalScrollView>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/gridDetail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_overlay"
+        android:lineSpacingExtra="3dp"
+        android:minHeight="76dp"
+        android:paddingStart="18dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="18dp"
+        android:paddingBottom="12dp"
+        android:text="载入节目单…"
+        android:textColor="#C9D8F5"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/gridFooter"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text="金色 = 已预约　·　蓝色描边 = 当前选中　·　竖线 = 现在"
+        android:textColor="@color/text_muted"
+        android:textSize="10.5sp" />
+</LinearLayout>

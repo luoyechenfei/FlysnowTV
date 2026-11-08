@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="直接粘贴聚合订阅地址，一行一个也可以批量导入。应用会自动拉取并识别 m3u / m3u8 / txt / JSON，不需要复制列表内容。"
+            android:textColor="#8FB2FF"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/quickImportUrls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/bg_input"
+            android:gravity="top|start"
+            android:hint="https://example.com/all.m3u&#10;https://example.com/list.txt"
+            android:inputType="textMultiLine|textUri"
+            android:minLines="4"
+            android:padding="12dp"
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_muted"
+            android:textSize="12sp" />
+
+        <EditText
+            android:id="@+id/quickImportHeaders"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_input"
+            android:gravity="top|start"
+            android:hint="可选：自定义请求头（每行一条）&#10;Referer: https://example.com/&#10;User-Agent: IPTV"
+            android:inputType="textMultiLine"
+            android:minLines="2"
+            android:padding="12dp"
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_muted"
+            android:textSize="12sp" />
+
+        <CheckBox
+            android:id="@+id/quickImportReplace"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:buttonTint="@color/accent"
+            android:text="替换现有接口（换订阅时勾选）"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="导入时会真实拉取每个链接并校验频道数，只有能解析出频道的才会保存。需要 Referer / Token / POST 的接口请改用下面的「添加接口（URL）」。\n\n最快的方式：手机扫码 → 在手机浏览器里粘贴链接 → 一键导入到电视。"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+</ScrollView>

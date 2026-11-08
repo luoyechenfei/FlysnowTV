@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 全局唯一的预览 surface：只在用户开启预览时创建一次，并复用挂到聚焦卡片上。
+     用 texture_view 是为了不穿透卡片名称栏；因为只有一个实例，不会拖垮盒子 GPU。 -->
+<androidx.media3.ui.PlayerView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/previewSurface"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:focusable="false"
+    app:resize_mode="zoom"
+    app:show_buffering="never"
+    app:surface_type="texture_view"
+    app:use_controller="false" />

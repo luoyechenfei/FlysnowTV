@@ -1,0 +1,17 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+/app/build
+*.apk
+
+# 签名密钥与凭据（绝不提交）
+keystore/
+*.jks
+keystore.properties
