@@ -2,6 +2,7 @@ package com.iptv.tvplayer
 
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -9,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -17,6 +19,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -211,6 +214,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bottomProgress: ProgressBar
     private lateinit var bottomProgressText: TextView
     private lateinit var bottomNext: TextView
+    private lateinit var btnFav: TextView
     private lateinit var btnGuide: TextView
     private lateinit var btnLine: TextView
     private lateinit var btnQuality: TextView
@@ -244,8 +248,8 @@ class MainActivity : AppCompatActivity() {
     /** 手动按过 MENU：信息栏进入「遥控器操作模式」，上下左右都用于选功能。
      *  换台等自动显示的信息栏不进入此模式，方向键仍是换台 / 切线路。 */
     private var manualBottomMode = false
-    /** 手动模式下高亮的功能序号（默认落在「线路」），不依赖 Android View 焦点 */
-    private var bottomActionIndex = 1
+    /** 手动模式下高亮的功能序号（进入模式时重设为「线路」），不依赖 Android View 焦点 */
+    private var bottomActionIndex = 0
 
     /**
      * 本次 OK 的 down 已被 Activity 消费。OK 的 up 必须一并吞掉：
@@ -254,8 +258,21 @@ class MainActivity : AppCompatActivity() {
      */
     private var consumedOkDown = false
 
-    /** 播放态短按 OK 等抬键才打开节目单；长按时由 onKeyLongPress 撤销并改为收藏 */
+    /** 播放态短按 OK 等抬键才打开节目单；长按时撤销并改为收藏 */
     private var pendingShowEpgOnOkUp = false
+
+    /** 节目单里短按 OK 也等抬键才换台：长按 OK 可直接撤销换收藏，节目单不会消失 */
+    private var pendingPickEpgOnOkUp = false
+
+    /** 本次 OK 长按是否已处理：framework 长按回调与 repeat 兜底共用，避免重复 toggle */
+    private var okLongPressHandled = false
+
+    /** 系统长按阈值；部分盒子只发 repeat、不发 onKeyLongPress，用它做兜底判定 */
+    private fun longPressTimeoutMs(): Long = ViewConfiguration.getLongPressTimeout().toLong()
+
+    /** 长按 OK 的收藏对象：节目单里收藏高亮频道，否则收藏当前播放频道 */
+    private fun favoriteTargetForLongPress(): Channel? =
+        if (epgVisible) allChannels.getOrNull(epgIndex) else currentChannel
 
     /** 统一的 5 秒倒计时：到点把左上「正在播放」、右上换台卡、底部信息栏一起收起 */
     private val hideInfoCardRunnable = Runnable { hideTransientInfo() }
@@ -464,6 +481,7 @@ class MainActivity : AppCompatActivity() {
         bottomProgress = findViewById(R.id.bottomProgress)
         bottomProgressText = findViewById(R.id.bottomProgressText)
         bottomNext = findViewById(R.id.bottomNext)
+        btnFav = findViewById(R.id.btnFav)
         btnGuide = findViewById(R.id.btnGuide)
         btnLine = findViewById(R.id.btnLine)
         btnQuality = findViewById(R.id.btnQuality)
@@ -1161,8 +1179,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildGroups() {
         val groups = LinkedHashSet<String>()
-        if (prefs.favoriteKeys.isNotEmpty()) groups.add(Library.GROUP_FAVORITE)
-        if (prefs.recentKeys.isNotEmpty()) groups.add(Library.GROUP_RECENT)
+        // 「★ 我的收藏」固定排在「⏱ 最近观看」之前，两个虚拟分组始终可见：
+        // 即使还没有收藏 / 观看记录，也能直接找到入口并看到明确的空状态提示。
+        groups.add(Library.GROUP_FAVORITE)
+        groups.add(Library.GROUP_RECENT)
         for (channel in allChannels) {
             val group = channel.group
             if (!group.isNullOrBlank()) groups.add(group)
@@ -1218,7 +1238,7 @@ class MainActivity : AppCompatActivity() {
                 allChannels.isEmpty() ->
                     "还没有频道　·　长按 MENU 3 秒或点右上角「设置」添加播放源"
                 activeGroup == Library.GROUP_FAVORITE ->
-                    "收藏夹还是空的　·　在频道墙上长按 OK 收藏"
+                    "还没有收藏的频道　·　播放时长按 OK，或在节目单里长按 OK 收藏"
                 activeGroup == Library.GROUP_RECENT ->
                     "最近观看里暂时没有可播放频道　·　点上方「全部」查看全部频道"
                 else -> "这个分组暂时没有频道　·　点上方「全部」查看全部频道"
@@ -1250,17 +1270,25 @@ class MainActivity : AppCompatActivity() {
         return channelAdapter.channelAt(position)
     }
 
-    /** 长按 OK（或收藏键）切换收藏；虚拟分组会即时重排 */
+    /** 长按 OK（或收藏键 / 底部 ★ 按钮）切换收藏；节目单保持显示并即时刷新星标 */
     private fun toggleFavorite(channel: Channel) {
         val added = prefs.toggleFavorite(channel.stableKey())
         buildGroups()
-        if (Library.isVirtual(activeGroup)) {
-            applyFilter(focusFirst = false)
-            focusCard(0)
-        } else {
-            channelAdapter.notifyDataSetChanged()
+        when {
+            // 节目单可见时绝不重排墙面、不抢焦点、不关闭节目单：
+            // 只刷新列表行的 ★/☆，长按收藏 / 再长按取消都能原地看到变化。
+            epgVisible -> {
+                epgAdapter.refreshGuide()
+                updateEpgDetail()
+                channelAdapter.notifyDataSetChanged()
+            }
+            Library.isVirtual(activeGroup) -> {
+                applyFilter(focusFirst = false)
+                focusCard(0)
+            }
+            else -> channelAdapter.notifyDataSetChanged()
         }
-        if (epgVisible) epgAdapter.refreshGuide()
+        refreshBottomButtons()
         toast(if (added) "★ 已收藏：${channel.name}" else "已取消收藏：${channel.name}")
     }
 
@@ -1655,10 +1683,18 @@ class MainActivity : AppCompatActivity() {
         bottomNext.text = nextLine
     }
 
-    /** 按钮文字直接显示当前状态：线路、画质、播放状态、内核 */
+    /** 按钮文字直接显示当前状态：收藏星标、线路、画质、播放状态、内核 */
     private fun refreshBottomButtons(channel: Channel? = currentChannel) {
         val ch = channel ?: return
         if (!::btnLine.isInitialized) return
+        val fav = prefs.isFavorite(ch.stableKey())
+        btnFav.text = if (fav) "★ 已收藏" else "☆ 收藏"
+        btnFav.setTextColor(
+            ContextCompat.getColorStateList(
+                this,
+                if (fav) R.color.bottom_fav_text else R.color.bottom_button_text
+            ) ?: ColorStateList.valueOf(Color.WHITE)
+        )
         val urls = ch.allUrls()
         val idx = prefs.lineIndexFor(ch.stableKey())
             .coerceIn(0, (urls.size - 1).coerceAtLeast(0))
@@ -1703,7 +1739,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bottomActionButtons(): List<View> =
-        listOf(btnGuide, btnLine, btnQuality, btnControl, btnEngine, btnSettings, btnClear)
+        listOf(btnFav, btnGuide, btnLine, btnQuality, btnControl, btnEngine, btnSettings, btnClear)
 
     /** 手动模式下用 isSelected 高亮当前功能，不依赖系统焦点，盒子遥控器一定可选 */
     private fun applyBottomSelection() {
@@ -1739,7 +1775,8 @@ class MainActivity : AppCompatActivity() {
         // 手动 MENU 把三处信息一起重新呼出（自动消失后只有手动 MENU / 下次换台能再显示）
         showChannelInfo(ch)
         manualBottomMode = true
-        bottomActionIndex = 1   // 默认落在「线路」
+        // 默认落在「线路」；按按钮对象查找，之后增删按钮也不会错位
+        bottomActionIndex = bottomActionButtons().indexOf(btnLine).coerceAtLeast(0)
         bottomInfoBar.post {
             if (bottomInfoBar.visibility == View.VISIBLE) {
                 applyBottomSelection()
@@ -1787,7 +1824,7 @@ class MainActivity : AppCompatActivity() {
         return false
     }
 
-    /** 上下左右都在 7 个功能间环形移动（上一个 / 下一个） */
+    /** 上下左右都在 8 个功能间环形移动（上一个 / 下一个） */
     private fun moveManualSelection(delta: Int) {
         val n = bottomActionButtons().size
         bottomActionIndex = (bottomActionIndex + delta + n) % n
@@ -1816,6 +1853,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupBottomActions() {
+        btnFav.setOnClickListener {
+            (currentChannel ?: focusedChannel())?.let { toggleFavorite(it) }
+            scheduleInfoHide()
+        }
         btnGuide.setOnClickListener { showEpg() }
         btnLine.setOnClickListener { pickBottomLine() }
         btnQuality.setOnClickListener { pickBottomQuality() }
@@ -2111,20 +2152,24 @@ class MainActivity : AppCompatActivity() {
         // 旧版就是这样出现「按 OK 弹出节目单」「EPG 选 15 又跳回 13」的。
         if (isOkKey(keyCode) && consumedOkDown) {
             consumedOkDown = false
-            if (pendingShowEpgOnOkUp) {
-                pendingShowEpgOnOkUp = false
-                showEpg()
-            }
+            val showEpgOnUp = pendingShowEpgOnOkUp
+            val pickEpgOnUp = pendingPickEpgOnOkUp
+            pendingShowEpgOnOkUp = false
+            pendingPickEpgOnOkUp = false
+            if (pickEpgOnUp) pickEpgChannel(epgIndex) else if (showEpgOnUp) showEpg()
             return true
         }
         return super.onKeyUp(keyCode, event)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        // 每次 OK 按下都从干净状态开始，避免上一次的残留标志吞掉本次抬键
-        if (isOkKey(keyCode)) {
+        // 每次 OK「首次」按下都从干净状态开始；repeat DOWN 不清标志，
+        // 否则长按时待执行的短按动作会被中途抹掉。
+        if (isOkKey(keyCode) && (event == null || event.repeatCount == 0)) {
             consumedOkDown = false
             pendingShowEpgOnOkUp = false
+            pendingPickEpgOnOkUp = false
+            okLongPressHandled = false
         }
 
         // 手动按过 MENU 后，上下左右 / OK / BACK 全部由底部信息栏接管；
@@ -2168,6 +2213,18 @@ class MainActivity : AppCompatActivity() {
         // 让 OK 键参与长按跟踪：长按 OK = 收藏当前频道（见 onKeyLongPress）
         if (event != null && isOkKey(keyCode) && event.repeatCount == 0) {
             event.startTracking()
+        }
+        // 长按兜底：不少盒子不发 framework 的 onKeyLongPress，只发连续 repeat。
+        // 用 downTime 判断按住时长，超过系统长按阈值就收藏一次，并撤销所有短按动作。
+        if (isOkKey(keyCode) && mode == MODE_PLAYER && !okLongPressHandled &&
+            event != null && (event.repeatCount >= 1 || event.isLongPress) &&
+            (event.isLongPress || event.eventTime - event.downTime >= longPressTimeoutMs())
+        ) {
+            okLongPressHandled = true
+            pendingShowEpgOnOkUp = false
+            pendingPickEpgOnOkUp = false
+            favoriteTargetForLongPress()?.let { toggleFavorite(it) }
+            return consumeOk(keyCode)
         }
         // 长按产生的重复 DOWN 一律吞掉，绝不落到「OK 打开节目单」等短按行为。
         // 墙面模式除外：卡片长按收藏由 ChannelAdapter 自己的定时器处理。
@@ -2270,8 +2327,9 @@ class MainActivity : AppCompatActivity() {
                 }
                 when {
                     epgVisible -> {
-                        // 只按当前高亮频道换台一次；抬键被吞掉，不会被列表行再点一次覆盖回原频道
-                        pickEpgChannel(epgIndex)
+                        // 等抬键再换台：长按时由收藏逻辑撤销，节目单不会消失、不会被换台。
+                        // 抬键同时被吞掉，列表行不会二次点击把频道覆盖回原台。
+                        pendingPickEpgOnOkUp = true
                         return consumeOk(keyCode)
                     }
                     mode == MODE_PLAYER -> {
@@ -2302,11 +2360,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onKeyLongPress(keyCode: Int, event: KeyEvent?): Boolean {
-        // 长按 OK = 收藏当前频道。撤销「短按打开节目单」，避免长按后先弹节目单。
+        // 长按 OK = 收藏：播放态收藏当前频道，节目单可见时收藏高亮频道。
+        // 撤销所有待执行的短按动作，节目单保持显示、不换台、不重开。
         // 墙面由 ChannelAdapter 自己的长按定时器处理，这里不接管，防止重复 toggle。
-        if (isOkKey(keyCode) && mode == MODE_PLAYER && !epgVisible) {
+        if (isOkKey(keyCode) && mode == MODE_PLAYER && !okLongPressHandled) {
+            okLongPressHandled = true
             pendingShowEpgOnOkUp = false
-            currentChannel?.let {
+            pendingPickEpgOnOkUp = false
+            favoriteTargetForLongPress()?.let {
                 toggleFavorite(it)
                 return true
             }

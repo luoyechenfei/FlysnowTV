@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 底部「★ 收藏」按钮已收藏时的文字色：常态金色，遥控器高亮时提亮为纯白 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true" android:color="#FFFFFFFF" />
+    <item android:state_pressed="true" android:color="#FFFFFFFF" />
+    <item android:state_focused="true" android:color="#FFFFFFFF" />
+    <item android:color="#FFFFD36B" />
+</selector>

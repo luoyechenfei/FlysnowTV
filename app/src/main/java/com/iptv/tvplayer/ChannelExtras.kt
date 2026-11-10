@@ -8,8 +8,8 @@ package com.iptv.tvplayer
  */
 object Library {
 
-    /** 虚拟分组：收藏夹（不属于任何源的 group-title） */
-    const val GROUP_FAVORITE = "★ 收藏"
+    /** 虚拟分组：我的收藏（固定排在「最近观看」之前，不属于任何源的 group-title） */
+    const val GROUP_FAVORITE = "★ 我的收藏"
 
     /** 虚拟分组：最近观看 */
     const val GROUP_RECENT = "⏱ 最近观看"

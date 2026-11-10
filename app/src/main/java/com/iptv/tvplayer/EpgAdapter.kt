@@ -1,5 +1,6 @@
 package com.iptv.tvplayer
 
+import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -47,8 +48,12 @@ class EpgAdapter(
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
         val channel = items[position]
+        val fav = isFavorite(channel)
         holder.number.text = String.format("%02d", channel.number)
-        holder.name.text = (if (isFavorite(channel)) "★ " else "") + channel.name
+        holder.name.text = channel.name
+        // 独立星标列：已收藏实心金色 ★，未收藏空心淡蓝 ☆，长按收藏 / 取消后即时刷新
+        holder.fav.text = if (fav) "★" else "☆"
+        holder.fav.setTextColor(Color.parseColor(if (fav) "#FFD36B" else "#6F86AE"))
         holder.program.text = guide(channel)
         holder.meta.text = buildString {
             append(channel.group?.takeIf { it.isNotBlank() } ?: "未分组")
@@ -72,6 +77,7 @@ class EpgAdapter(
         val name: TextView = itemView.findViewById(R.id.epgName)
         val program: TextView = itemView.findViewById(R.id.epgProgram)
         val meta: TextView = itemView.findViewById(R.id.epgMeta)
+        val fav: TextView = itemView.findViewById(R.id.epgFav)
         val now: TextView = itemView.findViewById(R.id.epgNow)
 
         init {

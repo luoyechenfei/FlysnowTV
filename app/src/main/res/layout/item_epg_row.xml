@@ -60,6 +60,16 @@
     </LinearLayout>
 
     <TextView
+        android:id="@+id/epgFav"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:text="☆"
+        android:textColor="#6F86AE"
+        android:textSize="17sp"
+        android:textStyle="bold" />
+
+    <TextView
         android:id="@+id/epgNow"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

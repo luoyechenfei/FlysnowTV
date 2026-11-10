@@ -535,6 +535,11 @@
             android:orientation="horizontal">
 
             <TextView
+                android:id="@+id/btnFav"
+                style="@style/BottomActionButton"
+                android:text="☆ 收藏" />
+
+            <TextView
                 android:id="@+id/btnGuide"
                 style="@style/BottomActionButton"
                 android:drawableStart="@drawable/ic_flat_guide"
@@ -580,8 +585,10 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:ellipsize="end"
                 android:gravity="end|center_vertical"
-                android:text="↑↓←→ 选择　·　OK 确认　·　BACK 收起　·　长按 MENU 设置"
+                android:maxLines="1"
+                android:text="↑↓←→ 选　OK 确认　BACK 收起　长按 MENU 设置"
                 android:textColor="#9DB6DE"
                 android:textSize="9.5sp" />
         </LinearLayout>
