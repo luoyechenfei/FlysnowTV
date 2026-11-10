@@ -66,6 +66,8 @@ class MainActivity : AppCompatActivity() {
         private const val OVERLAY_HIDE_DELAY = 5000L
         private const val NUMBER_TIMEOUT = 2500L
         private const val NUMBER_MAX_DIGITS = 4
+        /** 长按 MENU 超过 3 秒才进设置中心；短按只呼出底部信息栏 */
+        private const val MENU_LONG_PRESS_MS = 3000L
         private val PROGRESSIVE_EXTENSIONS = listOf(
             ".mp4", ".ts", ".mkv", ".flv", ".mov", ".avi", ".wmv", ".m4v", ".3gp",
             ".webm", ".ogv", ".mpg", ".mpeg", ".m2ts", ".rmvb", ".rm", ".f4v"
@@ -226,9 +228,28 @@ class MainActivity : AppCompatActivity() {
 
     private val commitNumberRunnable = Runnable { commitNumber() }
     private val hideOverlayRunnable = Runnable { hidePlayerOverlay() }
-    private val hideInfoCardRunnable = Runnable {
-        channelInfoCard.visibility = View.GONE
-        bottomInfoBar.visibility = View.GONE
+
+    // MENU 长短按：短按在 onKeyUp 里呼出底部信息栏，长按 3 秒才打开设置
+    private var menuLongPressFired = false
+    private val menuLongPressRunnable = Runnable {
+        menuLongPressFired = true
+        toast("长按 MENU · 打开设置中心")
+        openSettings()
+    }
+
+    // 用匿名对象而非 SAM lambda：内部要引用自身重新排期（同 tokenTick 写法）
+    private val hideInfoCardRunnable = object : Runnable {
+        override fun run() {
+            // 遥控器焦点还在底部按钮行时不要自动收起，避免选到一半信息栏消失
+            if (::bottomInfoBar.isInitialized && bottomInfoBar.visibility == View.VISIBLE &&
+                bottomActionsHasFocus()
+            ) {
+                handler.postDelayed(this, 8000L)
+            } else {
+                channelInfoCard.visibility = View.GONE
+                bottomInfoBar.visibility = View.GONE
+            }
+        }
     }
     private val hideReservationRunnable = Runnable {
         reservationCard.visibility = View.GONE
@@ -330,6 +351,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // 从设置中心返回时清掉残留的长按状态，避免下一次短按被误判
+        handler.removeCallbacks(menuLongPressRunnable)
+        menuLongPressFired = false
         applyPlayerSettings()
         stopPreview()
         updateMeta()
@@ -370,6 +394,9 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         handler.removeCallbacks(tokenTick)
         handler.removeCallbacks(epgTick)
+        handler.removeCallbacks(menuLongPressRunnable)
+        handler.removeCallbacks(hideInfoCardRunnable)
+        menuLongPressFired = false
         // 切后台时清掉未确认的台号，避免 2.5 秒后在后台偷偷换台
         cancelNumberInput()
         stopPreview()
@@ -456,7 +483,7 @@ class MainActivity : AppCompatActivity() {
             bindChannels(emptyList())
             sourceLabelView.text = "未添加订阅"
             emptyHint.visibility = View.VISIBLE
-            emptyHint.text = "还没有播放源　·　按 MENU 或右上角「设置」→ 粘贴一个聚合订阅链接即可"
+            emptyHint.text = "还没有播放源　·　长按 MENU 3 秒或点右上角「设置」→ 粘贴一个聚合订阅链接即可"
             handler.postDelayed({
                 if (!repository.hasSources && !isFinishing) openSettings()
             }, 1200)
@@ -630,7 +657,7 @@ class MainActivity : AppCompatActivity() {
                     append("\n\n订阅里若含组播 TS / 需登录的线路，内置播放器无法解析，请换线路或开启外部播放器回退")
                     if (timeshiftStart != null) append("\n回看失败多为源不支持时移，按快退键回到直播")
                     append("\n\n若全部频道都失败：设置 → 播放诊断 → 生成日志文件，可查 TLS / 解码 / 网络原因")
-                    append("\n\n按 BACK 返回频道墙换台，MENU 打开设置")
+                    append("\n\n按 BACK 返回频道墙换台，短按 MENU 呼出底部信息栏，长按 3 秒进设置")
                 }
                 showPlayerOverlay()
             }
@@ -1081,7 +1108,7 @@ class MainActivity : AppCompatActivity() {
                 }.onFailure { error ->
                     emptyHint.visibility = View.VISIBLE
                     emptyHint.text =
-                        "加载播放源失败：${error.message ?: "未知错误"}\n\n按 MENU 打开设置检查地址，或确认盒子已联网"
+                        "加载播放源失败：${error.message ?: "未知错误"}\n\n长按 MENU 3 秒打开设置检查地址，或确认盒子已联网"
                     countView.text = "${allChannels.size} 个频道"
                 }
                 if (pendingReload) {
@@ -1361,7 +1388,7 @@ class MainActivity : AppCompatActivity() {
     /** 打开 EPG 时间轴网格 */
     private fun openEpgGrid() {
         if (allChannels.isEmpty()) {
-            toast("还没有频道，按 MENU 打开设置添加播放源")
+            toast("还没有频道，长按 MENU 3 秒进设置添加播放源")
             return
         }
         EpgGridActivity.pendingChannels = allChannels
@@ -1390,7 +1417,7 @@ class MainActivity : AppCompatActivity() {
     private fun playNeighbor(delta: Int) {
         val playable = allChannels.filter { it.url.isNotBlank() }
         if (playable.isEmpty()) {
-            toast("还没有可直连的源，按 MENU 添加")
+            toast("还没有可直连的源，长按 MENU 3 秒进设置添加")
             return
         }
         val current = currentChannel
@@ -1625,10 +1652,63 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed(hideInfoCardRunnable, 8000L)
     }
 
+    private fun bottomActionButtons(): List<View> =
+        listOf(btnGuide, btnLine, btnQuality, btnControl, btnEngine, btnSettings, btnClear)
+
     private fun bottomActionsHasFocus(): Boolean {
         if (!::btnLine.isInitialized) return false
-        return listOf(btnGuide, btnLine, btnQuality, btnControl, btnEngine, btnSettings, btnClear)
-            .any { it.hasFocus() }
+        return bottomActionButtons().any { it.hasFocus() }
+    }
+
+    /** 短按 MENU：呼出底部信息栏，并把焦点交给按钮行，让遥控器能直接操作 */
+    private fun onMenuShortPress() {
+        cancelNumberInput()
+        if (!::bottomInfoBar.isInitialized) return
+        if (epgVisible) hideEpg()
+        // 已经处于按钮操作状态时，再短按一次 MENU 收起信息栏
+        if (bottomInfoBar.visibility == View.VISIBLE && bottomActionsHasFocus()) {
+            hideBottomBarForRemote()
+            return
+        }
+        val ch = currentChannel ?: focusedChannel() ?: allChannels.firstOrNull()
+        if (ch == null) {
+            toast("还没有频道　·　长按 MENU 3 秒打开设置添加播放源")
+            return
+        }
+        showBottomInfo(ch)
+        // 等布局完成再请求焦点，避免 visibility 刚变化导致 requestFocus 失败
+        bottomInfoBar.post {
+            if (bottomInfoBar.visibility == View.VISIBLE) {
+                btnLine.requestFocus()
+                scheduleBottomInfoHide()
+            }
+        }
+        toast("←→ 选按钮　OK 确认　·　长按 MENU 3 秒进设置　·　BACK 收起")
+    }
+
+    /** 收起底部信息栏并把焦点还给播放器 / 频道墙 */
+    private fun hideBottomBarForRemote() {
+        handler.removeCallbacks(hideInfoCardRunnable)
+        channelInfoCard.visibility = View.GONE
+        bottomInfoBar.visibility = View.GONE
+        if (mode == MODE_PLAYER) playerView.requestFocus() else focusCurrentCard()
+    }
+
+    /** 左右键在 7 个按钮之间环形移动，焦点不会甩到频道墙或顶部按钮 */
+    private fun moveBottomFocus(delta: Int) {
+        val buttons = bottomActionButtons()
+        val index = buttons.indexOfFirst { it.hasFocus() }
+        if (index < 0) return
+        buttons[(index + delta + buttons.size) % buttons.size].requestFocus()
+    }
+
+    /** OK 直接触发当前聚焦按钮的点击（等价于鼠标点击），不交给播放态快捷键 */
+    private fun clickFocusedBottomAction() {
+        val btn = bottomActionButtons().firstOrNull { it.hasFocus() } ?: return
+        btn.isPressed = true
+        btn.performClick()
+        btn.isPressed = false
+        scheduleBottomInfoHide()
     }
 
     private fun setupBottomActions() {
@@ -1648,8 +1728,15 @@ class MainActivity : AppCompatActivity() {
         val reset = View.OnFocusChangeListener { _, hasFocus ->
             if (hasFocus) scheduleBottomInfoHide()
         }
-        listOf(btnGuide, btnLine, btnQuality, btnControl, btnEngine, btnSettings, btnClear)
-            .forEach { it.onFocusChangeListener = reset }
+        val buttons = bottomActionButtons()
+        buttons.forEachIndexed { i, v ->
+            v.onFocusChangeListener = reset
+            // 焦点闭环：即便系统自行做焦点搜索，也只会在这排按钮里移动
+            v.nextFocusLeftId = buttons[(i - 1 + buttons.size) % buttons.size].id
+            v.nextFocusRightId = buttons[(i + 1) % buttons.size].id
+            v.nextFocusUpId = v.id
+            v.nextFocusDownId = v.id
+        }
     }
 
     /** 选线路后立即用所选线路重新起播当前频道 */
@@ -1783,7 +1870,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showEpg() {
         if (allChannels.isEmpty()) {
-            toast("还没有频道，按 MENU 打开设置添加播放源")
+            toast("还没有频道，长按 MENU 3 秒进设置添加播放源")
             return
         }
         epgVisible = true
@@ -1890,6 +1977,17 @@ class MainActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------ 按键
 
+    /** MENU 抬键时若 3 秒长按还没触发，就执行短按：呼出底部信息栏 */
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_SETTINGS) {
+            handler.removeCallbacks(menuLongPressRunnable)
+            if (!menuLongPressFired) onMenuShortPress()
+            menuLongPressFired = false
+            return true
+        }
+        return super.onKeyUp(keyCode, event)
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         // 数字选台输入中：OK 立即跳转、DEL 退格、BACK 取消；
         // 必须放在播放态快捷键之前，否则上下/左右/OK 会把输入过程抢走。
@@ -1910,20 +2008,41 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        // MENU / SETTINGS：短按在 onKeyUp 里呼出底部信息栏，长按 3 秒才进设置中心。
+        // 放在播放态快捷键之前，避免按键被「左右切线路 / OK 节目单」抢走。
+        if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_SETTINGS) {
+            if (event == null || event.repeatCount == 0) {
+                menuLongPressFired = false
+                handler.removeCallbacks(menuLongPressRunnable)
+                handler.postDelayed(menuLongPressRunnable, MENU_LONG_PRESS_MS)
+            }
+            return true
+        }
         // 底部信息栏可见时，任何遥控器操作都算一次交互，重置 8 秒隐藏计时
         if (::bottomInfoBar.isInitialized && bottomInfoBar.visibility == View.VISIBLE) {
             scheduleBottomInfoHide()
-            // 焦点落在按钮行时，屏蔽播放器默认的「上下换台 / 左右切线路 / OK 节目单」，
-            // 否则遥控器还没选完按钮就换台了。左右键仍由系统做按钮间焦点导航。
+            // 焦点在按钮行：由 Activity 显式接管方向键与 OK，自己移动焦点 / 触发点击。
+            // 之前 OK 被 return true 吃掉、左右键被播放态切线路占用，遥控器因此完全无法操作。
             if (bottomActionsHasFocus()) {
                 when (keyCode) {
-                    KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
-                    KeyEvent.KEYCODE_BACK -> {
-                        bottomInfoBar.visibility = View.GONE
-                        handler.removeCallbacks(hideInfoCardRunnable)
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (event == null || event.repeatCount == 0) moveBottomFocus(-1)
                         return true
                     }
-                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> return true
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (event == null || event.repeatCount == 0) moveBottomFocus(1)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
+                    KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                        if (event == null || event.repeatCount == 0) clickFocusedBottomAction()
+                        return true
+                    }
+                    KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+                    KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
+                        hideBottomBarForRemote()
+                        return true
+                    }
                 }
             }
         }
@@ -1996,23 +2115,7 @@ class MainActivity : AppCompatActivity() {
                 showTimeshiftMenu()
                 return true
             }
-            KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS -> {
-                if (epgVisible) {
-                    allChannels.getOrNull(epgIndex)?.let { toggleFavorite(it) }
-                    return true
-                }
-                // 信息栏可见时，第一次 MENU 把焦点交给按钮行供选择；再按一次才进设置中心
-                if (::bottomInfoBar.isInitialized && bottomInfoBar.visibility == View.VISIBLE &&
-                    !bottomActionsHasFocus()
-                ) {
-                    btnLine.requestFocus()
-                    scheduleBottomInfoHide()
-                    toast("←→ 选择按钮，OK 确认；再按 MENU 打开设置")
-                    return true
-                }
-                openSettings()
-                return true
-            }
+            // MENU / SETTINGS 已在上方统一处理：短按呼出底部信息栏，长按 3 秒进设置
             KeyEvent.KEYCODE_BOOKMARK -> {
                 // 部分遥控器带收藏键：墙面直接收藏，EPG 面板收藏选中频道
                 val channel = if (epgVisible) {

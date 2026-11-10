@@ -129,7 +129,7 @@
         android:paddingTop="9dp"
         android:paddingEnd="18dp"
         android:paddingBottom="9dp"
-        android:text="0-9 数字选台　OK 节目单　GUIDE 时间轴　←→ 切线路　快退键 回看　BACK 频道墙　MENU 设置"
+        android:text="0-9 数字选台　OK 节目单　GUIDE 时间轴　←→ 切线路　快退键 回看　BACK 频道墙　MENU 信息栏　长按 MENU 设置"
         android:textColor="#C1CFE8"
         android:textSize="11.5sp"
         android:visibility="gone" />
@@ -268,7 +268,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:gravity="center"
-            android:text="还没有频道　按 MENU 或点右上角「设置」添加播放源"
+            android:text="还没有频道　长按 MENU 3 秒或点右上角「设置」添加播放源"
             android:textColor="@color/text_secondary"
             android:textSize="13sp" />
 
@@ -278,7 +278,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:text="OK 播放　·　长按 OK 收藏　·　CH+/CH- 换台　·　数字键直选　·　MENU 设置中心"
+            android:text="OK 播放　·　长按 OK 收藏　·　CH+/CH- 换台　·　数字键直选　·　MENU 信息栏　·　长按 MENU 设置"
             android:textColor="@color/text_muted"
             android:textSize="11sp" />
     </LinearLayout>
@@ -581,7 +581,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:gravity="end|center_vertical"
-                android:text="MENU 选中按钮　·　←→ 选择　·　OK 确认"
+                android:text="←→ 选择　·　OK 确认　·　BACK 收起　·　长按 MENU 设置"
                 android:textColor="#9DB6DE"
                 android:textSize="9.5sp" />
         </LinearLayout>
@@ -668,7 +668,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:gravity="center"
-            android:text="↑↓ 选台　OK 播放　MENU 收藏　BACK 收起"
+            android:text="↑↓ 选台　OK 播放　长按 OK 收藏　BACK 收起"
             android:textColor="@color/text_muted"
             android:textSize="10.5sp" />
     </LinearLayout>

@@ -1009,7 +1009,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun showAboutDialog() {
         val version = runCatching {
             packageManager.getPackageInfo(packageName, 0).versionName
-        }.getOrNull().orEmpty().ifBlank { "1.9" }
+        }.getOrNull().orEmpty().ifBlank { "1.9.1" }
         val message = buildString {
             append("飞雪TV　·　Android TV 直播播放器\n")
             append("版本 ").append(version).append("\n\n")
@@ -1042,7 +1042,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun showFeedbackDialog() {
         val version = runCatching {
             packageManager.getPackageInfo(packageName, 0).versionName
-        }.getOrNull().orEmpty().ifBlank { "1.9" }
+        }.getOrNull().orEmpty().ifBlank { "1.9.1" }
 
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1264,7 +1264,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun localVersion(): String =
         runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull().orEmpty()
 
-    /** 按数字段比较版本号：v1.9 > 1.8，1.10 > 1.9 */
+    /** 按数字段比较版本号：v1.9.1 > 1.9 > 1.8，1.10 > 1.9（支持三段版本号） */
     private fun isNewer(remote: String, local: String): Boolean {
         fun numbers(s: String) = Regex("\\d+").findAll(s)
             .map { it.value.toIntOrNull() ?: 0 }.toList()
