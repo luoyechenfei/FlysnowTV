@@ -49,12 +49,12 @@
         android:textSize="14sp"
         android:textStyle="bold" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+    <!-- 扁平单色矢量箭头：替代原来的字符 ›，与其它图标同一视觉语言 -->
+    <ImageView
+        android:layout_width="16dp"
+        android:layout_height="16dp"
         android:layout_marginStart="10dp"
-        android:text="›"
-        android:textColor="@color/text_secondary"
-        android:textSize="20sp" />
+        android:contentDescription="进入"
+        android:src="@drawable/ic_flat_chevron" />
 
 </LinearLayout>

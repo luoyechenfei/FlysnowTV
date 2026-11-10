@@ -1,30 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 设置行：聚焦 / 按下 / 常态，全部走统一拟态面 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:state_focused="true">
-        <shape android:shape="rectangle">
-            <gradient
-                android:angle="270"
-                android:endColor="#1B2A45"
-                android:startColor="#263C63" />
-            <stroke android:width="2dp" android:color="#8FB2FF" />
-            <corners android:radius="16dp" />
-        </shape>
-    </item>
-    <item android:state_pressed="true">
-        <shape android:shape="rectangle">
-            <solid android:color="#203354" />
-            <stroke android:width="1dp" android:color="@color/accent" />
-            <corners android:radius="16dp" />
-        </shape>
-    </item>
-    <item>
-        <shape android:shape="rectangle">
-            <gradient
-                android:angle="270"
-                android:endColor="#111927"
-                android:startColor="#182234" />
-            <stroke android:width="1dp" android:color="#26334A" />
-            <corners android:radius="16dp" />
-        </shape>
-    </item>
+    <item android:drawable="@drawable/bg_neu_focused" android:state_focused="true" />
+    <item android:drawable="@drawable/bg_neu_pressed" android:state_pressed="true" />
+    <item android:drawable="@drawable/bg_neu_raised" />
 </selector>

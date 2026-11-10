@@ -5,18 +5,21 @@
   res/mipmap-*/ic_launcher.png     48~192   应用图标
 
 1.3 起按用户要求去掉「飞雪TV」字样，只保留白色雪花图形。
-需要 Pillow（pip install pillow）。本机已把 Pillow 装在 F:/android-build/pylib，
-脚本会自动把该目录加入 sys.path，也可用环境变量 PIL_PATH 覆盖。
+需要 Pillow（pip install pillow）。若 Pillow 安装在非默认位置，
+可用环境变量 PIL_PATH 指向该目录。
 """
 import math
 import os
 import sys
 
+extra = os.environ.get("PIL_PATH")
+if extra:
+    sys.path.insert(0, extra)
+
 try:
     from PIL import Image, ImageDraw
 except ImportError:
-    sys.path.insert(0, os.environ.get("PIL_PATH", r"F:\android-build\pylib"))
-    from PIL import Image, ImageDraw
+    raise SystemExit("未找到 Pillow，请先 pip install pillow，或用 PIL_PATH 指定其所在目录")
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "src", "main", "res")
 

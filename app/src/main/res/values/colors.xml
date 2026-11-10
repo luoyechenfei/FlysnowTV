@@ -1,17 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 飞雪TV 设计系统：近黑底 + 蓝紫渐变 + 玻璃卡片 -->
-    <color name="bg">#070A11</color>
-    <color name="panel_bg">#101725</color>
-    <color name="surface">#1A2435</color>
-    <color name="surface_raised">#222E44</color>
-    <color name="accent">#5B8DFF</color>
-    <color name="accent_2">#A06BFF</color>
-    <color name="accent_dim">#22365F</color>
-    <color name="text_primary">#F2F6FF</color>
-    <color name="text_secondary">#96A5BF</color>
-    <color name="text_muted">#6D7C96</color>
-    <color name="divider">#26324A</color>
+    <!-- 飞雪TV 设计系统 v3：主流深蓝主调 + 柔光拟态玻璃 + 扁平单色图标
+         整体由「近黑」提亮为海军蓝 / 宝蓝层次，半透明面仍可透出直播画面。 -->
+    <color name="bg">#0B2658</color>
+    <color name="panel_bg">#113671</color>
+    <color name="surface">#1A4A8C</color>
+    <color name="surface_raised">#225AA6</color>
+    <color name="accent">#5B9BFF</color>
+    <color name="accent_2">#4FC3F0</color>
+    <color name="accent_dim">#1E4B8F</color>
+    <color name="text_primary">#F2F7FF</color>
+    <color name="text_secondary">#AFC6E8</color>
+    <color name="text_muted">#8AA7D2</color>
+    <color name="divider">#2C5A9E</color>
     <color name="success">#3DDC97</color>
     <color name="warning">#FFC46B</color>
+
+    <!-- 柔光拟态：半透明蓝面 / 高光 / 蓝黑阴影 / 内凹 -->
+    <color name="neu_face_top">#E62C5EA8</color>
+    <color name="neu_face_bottom">#D0163E7E</color>
+    <color name="neu_plate_top">#B3204C93</color>
+    <color name="neu_plate_bottom">#9E123A73</color>
+    <color name="neu_shadow">#40000F2C</color>
+    <color name="neu_highlight">#1FFFFFFF</color>
+    <color name="neu_stroke">#6659A6F0</color>
+    <color name="neu_stroke_focus">#CC9FC8FF</color>
+    <color name="neu_inset_top">#59001030</color>
+    <color name="neu_inset_bottom">#1F8FB2FF</color>
+
+    <!-- 扁平图标：统一单色，不渐变、不描边、不投影 -->
+    <color name="icon_flat">#C6D9F5</color>
+    <color name="icon_flat_active">#F2F7FF</color>
+    <color name="text_accent_soft">#A8CCFF</color>
+    <color name="text_info">#D3E2FA</color>
 </resources>

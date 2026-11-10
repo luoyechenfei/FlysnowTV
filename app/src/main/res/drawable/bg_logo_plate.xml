@@ -1,14 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 频道卡统一台标底板：
-     所有来源（网络台标 / 内置台标 / 首字母占位）都放进同一块圆角玻璃板，
-     同样尺寸、同样内边距、同样描边，避免导入台标五花八门、大小与底色各异。 -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <gradient
-        android:angle="270"
-        android:endColor="#18253C"
-        android:startColor="#22324E"
-        android:type="linear" />
-    <stroke android:width="1dp" android:color="#304563" />
-    <corners android:radius="12dp" />
-</shape>
+<!-- 台标底板：统一内凹槽，所有来源的台标等比居中，观感一致 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/bg_neu_inset" />
+</layer-list>

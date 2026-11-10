@@ -157,6 +157,27 @@ class WebConfigServer(
                     }
                 }
 
+                // 日志反馈：手机扫码后打开分享页，页面再通过这个接口取脱敏日志全文
+                method == "GET" && path == "/log" -> {
+                    val pin = queryOf(fullPath)["pin"].orEmpty()
+                    if (!checkPin(pin)) {
+                        respond(client, 403, "text/html; charset=utf-8", logPage("PIN 不正确，请看电视屏幕上的配对码", pin))
+                    } else {
+                        respond(client, 200, "text/html; charset=utf-8", logPage("", pin))
+                    }
+                }
+
+                method == "GET" && path == "/api/logs" -> {
+                    if (!checkPin(queryOf(fullPath)["pin"])) {
+                        respond(client, 403, "text/plain; charset=utf-8", "PIN 不正确")
+                    } else {
+                        val text = Diagnostics.latestFeedback(context).ifBlank {
+                            Diagnostics.feedbackReport(context, repository, "手机端扫码获取")
+                        }
+                        respond(client, 200, "text/plain; charset=utf-8", text)
+                    }
+                }
+
                 method == "POST" -> {
                     val json = runCatching { JSONObject(body) }.getOrNull()
                     if (json == null) {
@@ -312,6 +333,11 @@ class WebConfigServer(
                     prefs.epgUrl = s.optString("epgUrl", prefs.epgUrl)
                     prefs.epgIntervalIndex = s.optInt("epgInterval", prefs.epgIntervalIndex)
                     prefs.tokenIntervalIndex = s.optInt("tokenInterval", prefs.tokenIntervalIndex)
+                    // 与本地设置中心保持一致的另外两个开关
+                    val oldHide = prefs.hideFailedChannels
+                    prefs.hideFailedChannels = s.optBoolean("hideFailed", oldHide)
+                    prefs.externalFallback = s.optBoolean("externalFallback", prefs.externalFallback)
+                    if (oldHide != prefs.hideFailedChannels) prefs.notifySourceChanged()
                     emit("手机更新了播放设置")
                     okJson("设置已保存")
                 }
@@ -360,6 +386,8 @@ class WebConfigServer(
             put("epgUrl", prefs.epgUrl)
             put("epgInterval", prefs.epgIntervalIndex)
             put("tokenInterval", prefs.tokenIntervalIndex)
+            put("hideFailed", prefs.hideFailedChannels)
+            put("externalFallback", prefs.externalFallback)
         }
         return JSONObject().apply {
             put("ok", true)
@@ -418,6 +446,89 @@ class WebConfigServer(
         out.flush()
     }
 
+    /**
+     * 手机扫码后的日志分享页：把脱敏日志读进来，提供「复制 / 下载 / 系统分享」，
+     * 之后由用户在微信、QQ 里自行发送。局域网是 http 非安全上下文，
+     * navigator.share / clipboard 不一定可用，所以一律保留 textarea 手动复制兜底。
+     */
+    private fun logPage(error: String, pin: String): String {
+        val initJs = if (error.isBlank()) {
+            "load();"
+        } else {
+            "msg(" + JSONObject.quote(error) + ");document.getElementById(\"log\").value=\"\";"
+        }
+        return """<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>飞雪TV 日志反馈</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0A2049;color:#e8eefb;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;padding:18px}
+h1{font-size:20px;margin:0 0 8px}
+p{color:#AFC6E8;font-size:13px;line-height:1.7;margin:0 0 16px}
+.card{background:#123970;border:1px solid #2C5A9E;border-radius:14px;padding:16px;margin-bottom:14px}
+button{background:linear-gradient(135deg,#2F6FD6,#5B9BFF);color:#fff;border:0;border-radius:9px;padding:11px 15px;font-size:14px;font-weight:600;margin:0 8px 8px 0;cursor:pointer}
+button.alt{background:#1D4A8C;color:#cfe0ff}
+textarea{width:100%;height:46vh;background:#0B2657;color:#c9d8f5;border:1px solid #2C5A9E;border-radius:10px;padding:12px;font-size:12px;line-height:1.55;resize:vertical}
+#msg{color:#8fe0a8;font-size:13px;min-height:20px;margin-top:6px}
+.tag{display:inline-block;background:#1C4788;color:#9fc0ff;border-radius:6px;padding:3px 8px;font-size:12px;margin-bottom:10px}
+</style></head><body>
+<h1>飞雪TV 运行日志</h1>
+<p>日志中的订阅地址、Token、自定义 Header 已自动脱敏。复制或下载后，用微信 / QQ 发送即可。</p>
+<div class="card">
+<span class="tag">扫码取回 · 无需数据线</span>
+<div>
+<button onclick="shareLog()">分享到微信 / QQ</button>
+<button class="alt" onclick="copyLog()">复制全部日志</button>
+<button class="alt" onclick="downloadLog()">下载 .txt 文件</button>
+</div>
+<div id="msg"></div>
+</div>
+<textarea id="log" readonly>正在读取日志…</textarea>
+<script>
+var PIN = """ + JSONObject.quote(pin) + """;
+var LOG = "";
+function msg(t){document.getElementById("msg").textContent=t;}
+function load(){
+  fetch("/api/logs?pin="+encodeURIComponent(PIN)).then(function(r){
+    if(!r.ok){throw new Error("PIN 不正确或日志尚未生成");}
+    return r.text();
+  }).then(function(t){
+    LOG=t;document.getElementById("log").value=t;
+    msg("已读取 "+t.length+" 字符，可直接复制或分享");
+  }).catch(function(e){msg(e.message);});
+}
+function legacyCopy(){
+  var ta=document.getElementById("log");ta.focus();ta.select();
+  try{msg(document.execCommand("copy")?"已复制全文，粘贴到微信 / QQ 发送即可":"请长按文本框手动全选复制");}
+  catch(e){msg("请长按文本框手动全选复制");}
+}
+function copyLog(){
+  if(!LOG){msg("日志还没读取完");return;}
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(LOG).then(function(){msg("已复制全文，粘贴到微信 / QQ 发送即可");},legacyCopy);
+  }else{legacyCopy();}
+}
+function downloadLog(){
+  if(!LOG){msg("日志还没读取完");return;}
+  var blob=new Blob([LOG],{type:"text/plain;charset=utf-8"});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement("a");a.href=url;a.download="FlysnowTV_log.txt";
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},2000);
+  msg("已下载 .txt，可在微信 / QQ 里以「文件」形式发送");
+}
+function shareLog(){
+  if(!LOG){msg("日志还没读取完");return;}
+  if(navigator.share){
+    navigator.share({title:"飞雪TV 运行日志",text:LOG}).then(function(){msg("已调起系统分享");})
+      .catch(function(){copyLog();});
+  }else{copyLog();msg("当前浏览器不支持直接分享，已复制全文，请粘贴到微信 / QQ");}
+}
+""" + initJs + """
+</script></body></html>"""
+    }
+
     private fun indexOfHeaderEnd(bytes: ByteArray): Int {
         val marker = byteArrayOf(13, 10, 13, 10)
         var i = 0
@@ -454,32 +565,32 @@ class WebConfigServer(
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>飞雪TV · 手机配置</title>
 <style>
-:root{--bg:#080B12;--card:#141B29;--card2:#1B2434;--line:#2A364B;--txt:#F1F5FC;--sub:#93A2BC;--a:#5B8DFF;--b:#9B6BFF;--ok:#3DDC97}
+:root{--bg:#0A2049;--card:#103470;--card2:#164587;--line:#2C5A9E;--txt:#F1F5FC;--sub:#AFC6E8;--a:#5B9BFF;--b:#4FC3F0;--ok:#3DDC97}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:radial-gradient(1100px 520px at 12% -10%,#1B2E57 0%,transparent 62%),radial-gradient(800px 420px at 100% 0%,#33215C 0%,transparent 58%),var(--bg);color:var(--txt);font:15px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;padding:20px 16px 44px}
+body{margin:0;background:radial-gradient(1100px 520px at 12% -10%,#1E52A8 0%,transparent 62%),radial-gradient(800px 420px at 100% 0%,#12508F 0%,transparent 58%),var(--bg);color:var(--txt);font:15px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;padding:20px 16px 44px}
 .wrap{max-width:720px;margin:0 auto}
 header{display:flex;align-items:center;gap:12px;margin:8px 0 22px}
-.logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,var(--a),var(--b));display:grid;place-items:center;font-weight:800;font-size:19px;box-shadow:0 10px 26px rgba(91,141,255,.34)}
+.logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,var(--a),var(--b));display:grid;place-items:center;font-weight:800;font-size:19px;box-shadow:0 10px 26px rgba(91,155,255,.34)}
 h1{font-size:20px;margin:0;letter-spacing:.5px}h1 small{display:block;font-size:11px;color:var(--sub);font-weight:400;letter-spacing:0}
-.card{background:linear-gradient(160deg,rgba(31,42,62,.92),rgba(17,23,35,.94));border:1px solid var(--line);border-radius:20px;padding:18px 16px;margin-bottom:16px;box-shadow:0 14px 34px rgba(0,0,0,.28)}
+.card{background:linear-gradient(160deg,rgba(28,76,146,.92),rgba(14,44,96,.94));border:1px solid var(--line);border-radius:20px;padding:18px 16px;margin-bottom:16px;box-shadow:0 14px 34px rgba(2,18,52,.32)}
 .card h2{font-size:14px;margin:0 0 14px;display:flex;align-items:center;gap:8px;color:var(--txt)}
 .card h2:before{content:"";width:4px;height:15px;border-radius:3px;background:linear-gradient(var(--a),var(--b))}
 label{display:block;font-size:11px;color:var(--sub);margin:12px 0 5px;letter-spacing:.3px}
-input,textarea,select{width:100%;background:#0D1320;border:1px solid var(--line);color:var(--txt);border-radius:11px;padding:11px 12px;font:14px/1.5 inherit;outline:none}
-input:focus,textarea:focus,select:focus{border-color:var(--a);box-shadow:0 0 0 3px rgba(91,141,255,.16)}
+input,textarea,select{width:100%;background:#0B2657;border:1px solid var(--line);color:var(--txt);border-radius:11px;padding:11px 12px;font:14px/1.5 inherit;outline:none}
+input:focus,textarea:focus,select:focus{border-color:var(--a);box-shadow:0 0 0 3px rgba(91,155,255,.16)}
 textarea{resize:vertical;min-height:64px;font-size:12px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
-button{border:0;border-radius:11px;padding:11px 16px;font:600 14px inherit;color:#fff;background:linear-gradient(135deg,var(--a),var(--b));cursor:pointer;box-shadow:0 8px 20px rgba(91,141,255,.24)}
-button.ghost{background:#1B2537;border:1px solid var(--line);box-shadow:none;color:var(--sub)}
+button{border:0;border-radius:11px;padding:11px 16px;font:600 14px inherit;color:#fff;background:linear-gradient(135deg,var(--a),var(--b));cursor:pointer;box-shadow:0 8px 20px rgba(91,155,255,.24)}
+button.ghost{background:#1A4488;border:1px solid var(--line);box-shadow:none;color:var(--sub)}
 button.mini{padding:7px 11px;font-size:12px;border-radius:9px}
 .row{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap}
-.src{display:flex;align-items:center;gap:10px;background:#0D1320;border:1px solid var(--line);border-radius:13px;padding:11px 12px;margin-top:9px}
+.src{display:flex;align-items:center;gap:10px;background:#0B2657;border:1px solid var(--line);border-radius:13px;padding:11px 12px;margin-top:9px}
 .src div{flex:1;min-width:0;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .src span{display:block;color:var(--sub);font-size:10.5px;margin-top:2px}
 .hint{font-size:11px;color:var(--sub);margin-top:9px;line-height:1.6}
-.pinbar{display:flex;align-items:center;gap:10px;background:#0D1320;border:1px solid var(--line);border-radius:13px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:var(--sub)}
+.pinbar{display:flex;align-items:center;gap:10px;background:#0B2657;border:1px solid var(--line);border-radius:13px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:var(--sub)}
 .pinbar input{flex:1;width:auto;padding:7px 10px;letter-spacing:3px;font-size:16px;text-align:center}
-.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#1E2A3F;border:1px solid var(--line);color:var(--txt);padding:11px 18px;border-radius:13px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:9;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#17417F;border:1px solid var(--line);color:var(--txt);padding:11px 18px;border-radius:13px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:9;box-shadow:0 12px 30px rgba(2,18,52,.55)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .status{font-size:11px;color:var(--ok);margin-top:10px;word-break:break-all}
 .chk{display:flex;align-items:center;gap:9px;margin-top:12px;font-size:13px;color:var(--txt)}
@@ -526,6 +637,11 @@ footer{text-align:center;color:var(--sub);font-size:11px;margin-top:22px;line-he
 <div class="row"><button onclick="importBackup()">导入到电视</button></div>
 <div class="hint" id="backupResult">合并：新增不重复订阅；替换：用备份覆盖当前全部订阅。</div></div>
 
+<div class="card"><h2>日志反馈</h2>
+<label>遇到播放问题？打开日志页，复制或下载运行日志后，用微信 / QQ 发送即可。</label>
+<div class="row"><button onclick="openLogPage()">打开日志页（复制 / 下载 / 分享）</button></div>
+<div class="hint">日志里的订阅地址、Token、自定义 Header 已自动脱敏。</div></div>
+
 <div class="card"><h2>播放设置</h2>
 <div class="grid"><div><label>画质</label><select id="quality"></select></div><div><label>播放引擎</label><select id="engine"></select></div></div>
 <div class="grid"><div><label>台标来源</label><select id="logoMode"></select></div><div><label>XMLTV 刷新</label><select id="epgInterval"></select></div></div>
@@ -536,6 +652,8 @@ footer{text-align:center;color:var(--sub);font-size:11px;margin-top:22px;line-he
 <label class="chk"><input type="checkbox" id="preview"> 卡片聚焦时低码率预览小窗（盒子建议关闭）</label>
 <label class="chk"><input type="checkbox" id="background"> 返回频道墙继续后台播放（盒子建议关闭）</label>
 <label class="chk"><input type="checkbox" id="autoSwitch"> 线路失败时自动切换备用源</label>
+<label class="chk"><input type="checkbox" id="hideFailed"> 自动隐藏反复播放失败的频道</label>
+<label class="chk"><input type="checkbox" id="externalFallback"> 内置解码失败时自动尝试外部播放器</label>
 <div class="row"><button onclick="saveSettings()">保存设置</button><button class="ghost" onclick="refreshToken()">刷新 Token</button><button class="ghost" onclick="refreshEpg()">刷新节目单</button></div>
 <div class="status" id="status"></div></div>
 
@@ -553,14 +671,14 @@ function mk(label,cls,fn){var b=document.createElement("button");b.className="mi
 function fillSelects(){for(var k in OPT){var s=$(k);if(!s)continue;s.innerHTML="";for(var i=0;i<OPT[k].length;i++){var o=document.createElement("option");o.value=i;o.textContent=OPT[k][i];s.appendChild(o)}}}
 function loadState(){fetch("/api/state?pin="+encodeURIComponent(pin())).then(function(r){return r.json()}).then(function(d){
  if(!d.ok){toast(d.message||"连接失败");return}
- var s=d.settings||{};$("quality").value=s.quality||0;$("engine").value=s.engine||0;$("logoMode").value=s.logoMode||0;$("coverMode").value=(s.coverMode==null?0:s.coverMode);$("epgInterval").value=s.epgInterval==null?1:s.epgInterval;$("tokenInterval").value=s.tokenInterval==null?3:s.tokenInterval;$("logoTemplate").value=s.logoTemplate||"";$("epgUrl").value=s.epgUrl||"";$("preview").checked=!!s.preview;$("background").checked=!!s.background;$("autoSwitch").checked=s.autoSwitch!==false;
+ var s=d.settings||{};$("quality").value=s.quality||0;$("engine").value=s.engine||0;$("logoMode").value=s.logoMode||0;$("coverMode").value=(s.coverMode==null?0:s.coverMode);$("epgInterval").value=s.epgInterval==null?1:s.epgInterval;$("tokenInterval").value=s.tokenInterval==null?3:s.tokenInterval;$("logoTemplate").value=s.logoTemplate||"";$("epgUrl").value=s.epgUrl||"";$("preview").checked=!!s.preview;$("background").checked=!!s.background;$("autoSwitch").checked=s.autoSwitch!==false;$("hideFailed").checked=!!s.hideFailed;$("externalFallback").checked=s.externalFallback!==false;
  var box=$("sources");box.innerHTML="";var arr=d.sources||[];
  if(!arr.length){box.innerHTML='<div class="hint">还没有接口，用上面的表单添加</div>'}
  for(var i=0;i<arr.length;i++){(function(c){
    var row=document.createElement("div");row.className="src";row.style.flexWrap="wrap";
    var info=document.createElement("div");
    var on=c.enabled!==false;
-   info.innerHTML='<b style="color:'+(on?'#3DDC97':'#93A2BC')+'">'+(on?'✔ 启用中':'⏸ 已停用')+'</b>　'+(c.describe||c.url);
+   info.innerHTML='<b style="color:'+(on?'#3DDC97':'#AFC6E8')+'">'+(on?'✔ 启用中':'⏸ 已停用')+'</b>　'+(c.describe||c.url);
    var sub=document.createElement("span");sub.textContent=c.url;info.appendChild(sub);
    row.appendChild(info);
    var acts=document.createElement("div");acts.style.display="flex";acts.style.gap="6px";acts.style.flexWrap="wrap";
@@ -592,8 +710,9 @@ function clearForm(){editId=null;["url","headers","fields","body","tokenUrl","to
 function del(id){post("/api/source/delete",{id:id}).then(function(d){toast(d.message);loadState()})}
 function importText(){var text=$("m3u").value;if(!text){toast("请先粘贴 m3u 内容");return}post("/api/source/text",{text:text}).then(function(d){toast(d.message);if(d.ok){$("m3u").value="";loadState()}})}
 function exportBackup(){window.location="/api/backup/export?pin="+encodeURIComponent(pin())}
+function openLogPage(){window.location="/log?pin="+encodeURIComponent(pin())}
 function importBackup(){var t=$("backupText").value;if(!t.trim()){toast("请粘贴备份 JSON 内容");return}$("backupResult").textContent="正在导入…";var mode=$("backupReplace").checked?"replace":"merge";post("/api/backup/import",{text:t,mode:mode}).then(function(d){toast(d.message);$("backupResult").textContent=d.message;if(d.ok){$("backupText").value="";loadState()}}).catch(function(){$("backupResult").textContent="连不上电视，检查 WiFi 与 PIN"})}
-function saveSettings(){post("/api/settings",{settings:{quality:parseInt($("quality").value),engine:parseInt($("engine").value),logoMode:parseInt($("logoMode").value),coverMode:parseInt($("coverMode").value),logoTemplate:v("logoTemplate"),preview:$("preview").checked,background:$("background").checked,autoSwitch:$("autoSwitch").checked,epgUrl:v("epgUrl"),epgInterval:parseInt($("epgInterval").value),tokenInterval:parseInt($("tokenInterval").value)}}).then(function(d){toast(d.message);loadState()})}
+function saveSettings(){post("/api/settings",{settings:{quality:parseInt($("quality").value),engine:parseInt($("engine").value),logoMode:parseInt($("logoMode").value),coverMode:parseInt($("coverMode").value),logoTemplate:v("logoTemplate"),preview:$("preview").checked,background:$("background").checked,autoSwitch:$("autoSwitch").checked,hideFailed:$("hideFailed").checked,externalFallback:$("externalFallback").checked,epgUrl:v("epgUrl"),epgInterval:parseInt($("epgInterval").value),tokenInterval:parseInt($("tokenInterval").value)}}).then(function(d){toast(d.message);loadState()})}
 function refreshToken(){post("/api/token/refresh",{}).then(function(d){toast(d.message)})}
 function refreshEpg(){post("/api/epg/refresh",{}).then(function(d){toast(d.message)})}
 window.onload=function(){fillSelects();var q=new URLSearchParams(location.search).get("pin");if(q){$("pin").value=q}loadState()};

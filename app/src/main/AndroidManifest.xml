@@ -3,6 +3,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 在线更新：Android 8+ 安装自己下载的 APK 需要声明 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- 电视盒子没有触摸屏，这两项声明避免被应用市场/系统误过滤 -->
     <uses-feature
@@ -12,8 +14,10 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
-    <!-- Android 11+ 包可见性：允许检测并拉起第三方播放器与央视频 TV 版 -->
+    <!-- Android 11+ 包可见性：允许检测并拉起第三方播放器、央视频 TV 版与日志分享目标 -->
     <queries>
+        <package android:name="com.tencent.mm" />
+        <package android:name="com.tencent.mobileqq" />
         <package android:name="com.newtv.cboxtv" />
         <package android:name="org.videolan.vlc" />
         <package android:name="com.mxtech.videoplayer.ad" />
@@ -85,6 +89,16 @@
             android:name=".EpgGridActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|navigation"
             android:exported="false" />
+        <!-- 在线更新：把下载到应用私有目录的 APK 通过 FileProvider 交给系统安装器 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.iptv.tvplayer.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

@@ -39,6 +39,7 @@
             android:background="@drawable/accent_gradient" />
 
         <TextView
+            android:id="@+id/qrTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
@@ -48,6 +49,7 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/qrSubtitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
@@ -102,6 +104,7 @@
             android:textSize="12sp" />
 
         <TextView
+            android:id="@+id/qrSteps"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 内凹槽：台标底板、输入框等「嵌进去」的容器，统一尺寸观感 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#D61B488C"
+                android:startColor="#D6123672"
+                android:type="linear" />
+            <stroke android:width="1dp" android:color="#335FA8D8" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+    <item android:bottom="2dp" android:left="1dp" android:right="1dp" android:top="1dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="@color/neu_inset_bottom"
+                android:startColor="@color/neu_inset_top"
+                android:type="linear" />
+            <corners android:radius="11dp" />
+        </shape>
+    </item>
+</layer-list>

@@ -176,7 +176,7 @@ class EpgGridActivity : AppCompatActivity() {
             val label = TextView(this).apply {
                 text = clockFormat.format(Date(time))
                 textSize = 10f
-                setTextColor(Color.parseColor("#93A2BC"))
+                setTextColor(Color.parseColor("#AFC6E8"))
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(6), 0, 0, 0)
                 layoutParams = LinearLayout.LayoutParams(30 * minutePx, rulerPx)
@@ -220,7 +220,7 @@ class EpgGridActivity : AppCompatActivity() {
             val empty = TextView(this).apply {
                 text = if (epg?.isLoaded == true) "该频道本时段暂无节目数据" else "未加载 XMLTV 节目单（可在设置里填地址）"
                 textSize = 11f
-                setTextColor(Color.parseColor("#7C8AA3"))
+                setTextColor(Color.parseColor("#94ADD4"))
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(10), 0, 0, 0)
                 background = cellBackground(false, false)
@@ -277,14 +277,14 @@ class EpgGridActivity : AppCompatActivity() {
             cornerRadius = dp(6).toFloat()
             setColor(
                 when {
-                    selected -> Color.parseColor("#33507F")
-                    reserved -> Color.parseColor("#4A3C1E")
-                    else -> Color.parseColor("#172033")
+                    selected -> Color.parseColor("#245CA8")
+                    reserved -> Color.parseColor("#1F5AA8")
+                    else -> Color.parseColor("#10336B")
                 }
             )
             setStroke(
                 if (selected) dp(2) else dp(1),
-                if (selected) Color.parseColor("#7FB0FF") else Color.parseColor("#2A364B")
+                if (selected) Color.parseColor("#7FB0FF") else Color.parseColor("#2C5A9E")
             )
         }
 
@@ -306,7 +306,7 @@ class EpgGridActivity : AppCompatActivity() {
             }
             (channelColumn.getChildAt(rowIndex + 1) as? TextView)?.apply {
                 setBackgroundColor(
-                    if (rowIndex == selectedRow) Color.parseColor("#1E3358")
+                    if (rowIndex == selectedRow) Color.parseColor("#1A4A90")
                     else Color.TRANSPARENT
                 )
             }

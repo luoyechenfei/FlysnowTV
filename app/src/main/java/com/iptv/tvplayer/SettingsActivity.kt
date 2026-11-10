@@ -1,25 +1,34 @@
 package com.iptv.tvplayer
 
 import android.app.AlertDialog
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import android.net.Uri
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
+import org.json.JSONObject
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.ArrayList
 import java.util.Date
@@ -47,7 +56,10 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var epg: EpgRepository
     private lateinit var container: LinearLayout
     private lateinit var sourceContainer: LinearLayout
+    private lateinit var settingsScroll: ScrollView
     private val rows = ArrayList<Row>()
+    /** 分类锚点：遥控器按 1-9 直接跳到对应设置分区，不用滚十几屏 */
+    private val sectionViews = ArrayList<View>()
     private var templateRow: View? = null
     private var epgStatusRow: View? = null
     private var tokenStatusRow: View? = null
@@ -67,7 +79,17 @@ class SettingsActivity : AppCompatActivity() {
         tokens = repository.tokens
         epg = EpgRepository(this)
         container = findViewById(R.id.settingsContainer)
+        settingsScroll = findViewById(R.id.settingsScroll)
         buildUi()
+        registerDownloadReceiver()
+    }
+
+    override fun onDestroy() {
+        if (downloadReceiverRegistered) {
+            runCatching { unregisterReceiver(downloadReceiver) }
+            downloadReceiverRegistered = false
+        }
+        super.onDestroy()
     }
 
     override fun onResume() {
@@ -75,6 +97,8 @@ class SettingsActivity : AppCompatActivity() {
         if (::sourceContainer.isInitialized) {
             refreshSources()
             refreshStatusRows()
+            // 手机后台页 / 底部信息栏可能改过画质、引擎等设置，回来时对齐真实值
+            syncOptionRows()
         }
     }
 
@@ -92,6 +116,15 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }
+        // 1-9 快速跳到对应分类（与播放页的数字选台互不冲突，是两个界面）
+        val sectionIndex = keyCode - KeyEvent.KEYCODE_1
+        if (sectionIndex in sectionViews.indices) {
+            val target = sectionViews[sectionIndex]
+            settingsScroll.post {
+                settingsScroll.smoothScrollTo(0, (target.top - dp(8)).coerceAtLeast(0))
+            }
+            return true
+        }
         if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_SETTINGS) {
             finish()
             return true
@@ -104,6 +137,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun buildUi() {
         container.removeAllViews()
         rows.clear()
+        sectionViews.clear()
         templateRow = null
         epgStatusRow = null
         tokenStatusRow = null
@@ -248,8 +282,11 @@ class SettingsActivity : AppCompatActivity() {
             if (prefs.externalFallback) 0 else 1
         ) { prefs.externalFallback = it == 0 }
 
-        section("关于")
-        actionRow("关于 飞雪TV", "版本号与版权信息") { showAboutDialog() }
+        section("关于 / 反馈")
+        actionRow("关于 飞雪TV", "版本号、版权与项目主页") { showAboutDialog() }
+        actionRow("检测更新", "对比 GitHub Releases，支持一键在线更新") { checkForUpdate() }
+        actionRow("版本发布页", "查看历史版本与更新日志") { openUrl(releasesUrl) }
+        actionRow("日志上报反馈", "扫码 / 微信 / QQ 分享运行日志与崩溃记录") { showFeedbackDialog() }
 
         container.post {
             for (i in 0 until container.childCount) {
@@ -277,12 +314,13 @@ class SettingsActivity : AppCompatActivity() {
             layoutParams = lp
         }
         container.addView(tv)
+        sectionViews.add(tv)
     }
 
     private fun note(text: String) {
         val tv = TextView(this).apply {
             this.text = text
-            setTextColor(Color.parseColor("#93A2BC"))
+            setTextColor(Color.parseColor("#AFC6E8"))
             textSize = 11f
             setLineSpacing(dp(3).toFloat(), 1f)
             val lp = LinearLayout.LayoutParams(
@@ -336,6 +374,36 @@ class SettingsActivity : AppCompatActivity() {
         toast("已设为：${r.labels[r.index]}")
     }
 
+    /** 每个 option 行的真实当前值：集中一处，避免 UI 与 Prefs 各写各的 */
+    private fun currentOptionValue(key: String): Int = when (key) {
+        "tokenInterval" -> prefs.tokenIntervalIndex
+        "epgInterval" -> prefs.epgIntervalIndex
+        "preview" -> if (prefs.previewEnabled) 0 else 1
+        "background" -> if (prefs.backgroundPlay) 0 else 1
+        "autoSwitch" -> if (prefs.autoSwitchLine) 0 else 1
+        "quality" -> prefs.quality
+        "engine" -> prefs.engine
+        "logo" -> prefs.logoMode
+        "cover" -> prefs.coverMode
+        "hideFailed" -> if (prefs.hideFailedChannels) 0 else 1
+        "externalFallback" -> if (prefs.externalFallback) 0 else 1
+        else -> -1
+    }
+
+    /**
+     * 手机扫码后台 / 底部信息栏都可能改设置。回到设置页时把所有 option 行的
+     * 值与说明重新对齐 Prefs，否则会出现「界面显示 720p、实际已是 1080p」的错乱。
+     */
+    private fun syncOptionRows() {
+        for (r in rows) {
+            val value = currentOptionValue(r.key)
+            if (value < 0) continue
+            r.index = value.coerceIn(0, r.labels.lastIndex)
+            r.view.findViewById<TextView>(R.id.settingValue).text = r.labels[r.index]
+            r.view.findViewById<TextView>(R.id.settingDesc).text = r.hints.getOrElse(r.index) { "" }
+        }
+    }
+
     // ------------------------------------------------------------ 接口管理
 
     private fun refreshSources() {
@@ -344,7 +412,7 @@ class SettingsActivity : AppCompatActivity() {
         if (list.isEmpty()) {
             val tv = TextView(this).apply {
                 text = "尚未添加接口　·　最上方「粘贴链接，一键导入」填一个聚合订阅地址即可开始"
-                setTextColor(Color.parseColor("#93A2BC"))
+                setTextColor(Color.parseColor("#AFC6E8"))
                 textSize = 12f
                 setPadding(dp(4), dp(6), dp(4), dp(14))
             }
@@ -367,7 +435,7 @@ class SettingsActivity : AppCompatActivity() {
         val enabledCount = list.count { it.enabled }
         val tip = TextView(this).apply {
             text = "点某个订阅可：编辑 / 启用·停用 / 上下移优先级 / 重新校验 / 删除　·　共 ${list.size} 个（已启用 $enabledCount）"
-            setTextColor(Color.parseColor("#93A2BC"))
+            setTextColor(Color.parseColor("#AFC6E8"))
             textSize = 11f
             setPadding(dp(4), dp(8), dp(4), dp(6))
         }
@@ -939,17 +1007,12 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showAboutDialog() {
-        val info = runCatching { packageManager.getPackageInfo(packageName, 0) }.getOrNull()
-        val version = info?.versionName ?: "1.3"
-        val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            info?.longVersionCode ?: 4L
-        } else {
-            @Suppress("DEPRECATION")
-            info?.versionCode?.toLong() ?: 4L
-        }
+        val version = runCatching {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        }.getOrNull().orEmpty().ifBlank { "1.8" }
         val message = buildString {
             append("飞雪TV　·　Android TV 直播播放器\n")
-            append("版本 ").append(version).append("（versionCode ").append(code).append("）\n\n")
+            append("版本 ").append(version).append("\n\n")
 
             append("【版权与授权】\n")
             append("· 本应用不内置、不分发任何电视台直播流地址。\n")
@@ -957,16 +1020,364 @@ class SettingsActivity : AppCompatActivity() {
             append("· 播放源、接口地址、Token 与台标图片均由使用者自行提供。\n")
             append("· 仅供个人自用测试，请勿分发或公开提供流地址；商业使用需另行取得授权。\n\n")
 
-            append("【构建信息】\n")
-            append("Kotlin 1.9.24 · AGP 8.5.2 · Gradle 8.7\n")
-            append("Media3 / ExoPlayer 1.4.1 · Coil 2.6.0 · ZXing 3.5.3\n")
-            append("compileSdk 34 · minSdk 21 · targetSdk 34")
+            append("【项目主页】\n")
+            append(repoUrl)
         }
         AlertDialog.Builder(this)
             .setTitle("关于 飞雪TV")
             .setMessage(message)
             .setPositiveButton("关闭", null)
+            .setNeutralButton("打开项目主页") { _, _ -> openUrl(repoUrl) }
             .show()
+    }
+
+    // ------------------------------------------------------------ 日志上报反馈
+
+    private companion object Feedback {
+        const val MODE_QR = 0
+        const val MODE_SHARE = 1
+    }
+
+    /** 生成日志前让用户补一句问题描述，随报告一起发出 */
+    private fun showFeedbackDialog() {
+        val version = runCatching {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        }.getOrNull().orEmpty().ifBlank { "1.8" }
+
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val p = dp(20)
+            setPadding(p, dp(12), p, 0)
+        }
+        box.addView(TextView(this).apply {
+            text = buildString {
+                append("反馈方式：扫码取日志 / 微信 / QQ 分享\n")
+                append("版本 v").append(version).append("\n")
+                append("设备 ").append(Build.MANUFACTURER).append(" ").append(Build.MODEL)
+                    .append(" / Android ").append(Build.VERSION.RELEASE).append("\n\n")
+                append("日志包含：设备与网络栈、播放源（已脱敏）、起播 / 错误 / 换线路记录、崩溃堆栈、logcat 片段。\n")
+                append("订阅地址、Token 与自定义 Header 会自动打码。\n\n")
+                append("可补充问题描述，会随日志一起发出：")
+            }
+            setTextColor(Color.parseColor("#C3D7F5"))
+            textSize = 12f
+            setLineSpacing(dp(3).toFloat(), 1f)
+        })
+        val input = EditText(this).apply {
+            hint = "例如：CCTV-1 没声音 / 悬停不出预览 / 检测更新失败…"
+            setTextColor(Color.parseColor("#EAF1FF"))
+            setHintTextColor(Color.parseColor("#93AED8"))
+            textSize = 13f
+            isSingleLine = false
+            maxLines = 4
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            lp.topMargin = dp(10)
+            layoutParams = lp
+        }
+        box.addView(input)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("日志上报反馈")
+            .setView(box)
+            .setPositiveButton("扫码分享") { _, _ ->
+                prepareFeedback(input.text.toString(), MODE_QR)
+            }
+            .setNeutralButton("微信 / QQ 分享") { _, _ ->
+                prepareFeedback(input.text.toString(), MODE_SHARE)
+            }
+            .setNegativeButton("关闭", null)
+            .create()
+        dialog.show()
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+    }
+
+    private fun prepareFeedback(note: String, mode: Int) {
+        val file = runCatching { FeedbackReporter.build(this, repository, note) }
+            .getOrElse {
+                toast("日志生成失败：${it.message}")
+                return
+            }
+        // 无论走哪条通道，先把全文放剪贴板，盒子没有任何分享 App 时也能粘贴出去
+        FeedbackReporter.copy(this, runCatching { file.readText() }.getOrDefault(""))
+        Diagnostics.log(this, "FEEDBACK", "反馈日志 ${file.name} · ${file.length()} bytes · mode=$mode")
+
+        if (mode == MODE_QR) {
+            val started = runCatching {
+                startActivity(Intent(this, QrConfigActivity::class.java).apply {
+                    putExtra(QrConfigActivity.EXTRA_MODE, QrConfigActivity.MODE_LOGS)
+                })
+                true
+            }.getOrDefault(false)
+            if (started) toast("日志已生成并复制，请用手机扫码取回")
+            else showFeedbackFallback(file)
+        } else {
+            showShareChooser(file, note)
+        }
+    }
+
+    private fun showShareChooser(file: File, note: String) {
+        AlertDialog.Builder(this)
+            .setTitle("选择分享方式")
+            .setItems(arrayOf("分享到微信", "分享到 QQ", "更多分享方式", "仅保存 / 复制")) { _, which ->
+                when (which) {
+                    0 -> doShare(file, note, FeedbackReporter.WECHAT)
+                    1 -> doShare(file, note, FeedbackReporter.QQ)
+                    2 -> doShare(file, note, null)
+                    else -> showFeedbackFallback(file)
+                }
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun doShare(file: File, note: String, target: String?) {
+        if (FeedbackReporter.share(this, file, note, target)) {
+            toast("已调起分享；日志同时已复制到剪贴板")
+        } else {
+            toast("本机没有可分享的应用，日志已保存并复制")
+            showFeedbackFallback(file)
+        }
+    }
+
+    private fun showFeedbackFallback(file: File) {
+        AlertDialog.Builder(this)
+            .setTitle("日志已保存")
+            .setMessage(
+                "日志全文已复制到剪贴板，并保存到：\n\n" +
+                    "${file.absolutePath}\n\n" +
+                    "其它取回方式：\n" +
+                    "· 设置 → 手机扫码配置 → 「日志反馈」→ 打开日志页\n" +
+                    "· adb pull \"${file.absolutePath}\"\n" +
+                    "· 直接粘贴到微信 / QQ 发送"
+            )
+            .setPositiveButton("完成", null)
+            .show()
+    }
+
+    // ------------------------------------------------------------ 在线更新
+
+    private data class ReleaseInfo(
+        val tag: String,
+        val name: String,
+        val body: String,
+        val htmlUrl: String,
+        val apkUrl: String,
+        val apkSize: Long
+    )
+
+    private val repoUrl = "https://github.com/luoyechenfei/FlysnowTV"
+    private val releasesUrl = "https://github.com/luoyechenfei/FlysnowTV/releases"
+    private val latestApi = "https://api.github.com/repos/luoyechenfei/FlysnowTV/releases/latest"
+    private val updateFileName = "FlysnowTV-update.apk"
+    private var updateDownloadId = -1L
+    private var downloadReceiverRegistered = false
+
+    private val downloadReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+            if (id != updateDownloadId) return
+            val dm = getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager ?: return
+            var success = false
+            dm.query(DownloadManager.Query().setFilterById(id))?.use { c ->
+                if (c.moveToFirst()) {
+                    val status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    success = status == DownloadManager.STATUS_SUCCESSFUL
+                }
+            }
+            if (success) {
+                val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                val file = dir?.let { File(it, updateFileName) }
+                if (file != null && file.exists()) installApk(file) else openUrl(releasesUrl)
+            } else {
+                toast("更新包下载失败，可到发布页手动下载")
+            }
+        }
+    }
+
+    private fun registerDownloadReceiver() {
+        if (downloadReceiverRegistered) return
+        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(downloadReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(downloadReceiver, filter)
+        }
+        downloadReceiverRegistered = true
+    }
+
+    /** 检测更新：对比 GitHub Releases 最新 tag 与本机版本 */
+    private fun checkForUpdate() {
+        toast("正在检测更新…")
+        Thread {
+            val result = runCatching { fetchLatestRelease() }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                result.onSuccess { showUpdateResult(it) }
+                    .onFailure { showUpdateFailure(it) }
+            }
+        }.start()
+    }
+
+    private fun fetchLatestRelease(): ReleaseInfo {
+        val conn = (URL(latestApi).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10000
+            readTimeout = 15000
+            instanceFollowRedirects = true
+            setRequestProperty("Accept", "application/vnd.github+json")
+            setRequestProperty("User-Agent", "FlysnowTV-Android")
+        }
+        try {
+            if (conn.responseCode != 200) {
+                throw IllegalStateException("GitHub 返回 HTTP ${conn.responseCode}")
+            }
+            val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+            var apkUrl = ""
+            var apkSize = 0L
+            val assets = json.optJSONArray("assets")
+            if (assets != null) {
+                for (i in 0 until assets.length()) {
+                    val a = assets.optJSONObject(i) ?: continue
+                    if (a.optString("name").endsWith(".apk", true)) {
+                        apkUrl = a.optString("browser_download_url")
+                        apkSize = a.optLong("size")
+                        break
+                    }
+                }
+            }
+            return ReleaseInfo(
+                tag = json.optString("tag_name"),
+                name = json.optString("name"),
+                body = json.optString("body"),
+                htmlUrl = json.optString("html_url").ifBlank { releasesUrl },
+                apkUrl = apkUrl,
+                apkSize = apkSize
+            )
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun localVersion(): String =
+        runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull().orEmpty()
+
+    /** 按数字段比较版本号：v1.9 > 1.8，1.10 > 1.9 */
+    private fun isNewer(remote: String, local: String): Boolean {
+        fun numbers(s: String) = Regex("\\d+").findAll(s)
+            .map { it.value.toIntOrNull() ?: 0 }.toList()
+        val r = numbers(remote)
+        val l = numbers(local)
+        for (i in 0 until maxOf(r.size, l.size)) {
+            val rv = r.getOrElse(i) { 0 }
+            val lv = l.getOrElse(i) { 0 }
+            if (rv > lv) return true
+            if (rv < lv) return false
+        }
+        return false
+    }
+
+    private fun showUpdateResult(rel: ReleaseInfo) {
+        val current = localVersion()
+        if (rel.tag.isBlank()) {
+            showUpdateFailure(IllegalStateException("未读取到版本信息"))
+            return
+        }
+        if (!isNewer(rel.tag, current)) {
+            AlertDialog.Builder(this)
+                .setTitle("已是最新版本")
+                .setMessage("当前版本 $current，GitHub Releases 上最新的发布版本为 ${rel.tag}。")
+                .setPositiveButton("知道了", null)
+                // 即便是最新版，也允许重新下载安装，方便验证在线更新链路 / 修复损坏安装
+                .setNeutralButton("重新下载安装") { _, _ ->
+                    if (rel.apkUrl.isNotBlank()) downloadAndInstall(rel.apkUrl) else openUrl(releasesUrl)
+                }
+                .setNegativeButton("查看发布页") { _, _ -> openUrl(releasesUrl) }
+                .show()
+            return
+        }
+        val sizeText = if (rel.apkSize > 0) {
+            "（%.1f MB）".format(rel.apkSize / 1024.0 / 1024.0)
+        } else ""
+        val summary = rel.body.lineSequence()
+            .filter { it.isNotBlank() }
+            .take(8)
+            .joinToString("\n")
+            .ifBlank { "详见发布页更新说明" }
+        val title = rel.name.takeIf { it.isNotBlank() }?.let { "$it\n\n" } ?: ""
+        AlertDialog.Builder(this)
+            .setTitle("发现新版本 ${rel.tag}")
+            .setMessage(
+                "当前版本：$current\n最新版本：${rel.tag}$sizeText\n\n" +
+                    title + summary + "\n\n下载完成后会自动弹出安装界面。"
+            )
+            .setPositiveButton("一键在线更新") { _, _ ->
+                if (rel.apkUrl.isNotBlank()) downloadAndInstall(rel.apkUrl) else openUrl(releasesUrl)
+            }
+            .setNeutralButton("查看发布页") { _, _ -> openUrl(rel.htmlUrl) }
+            .setNegativeButton("稍后", null)
+            .show()
+    }
+
+    private fun showUpdateFailure(error: Throwable) {
+        AlertDialog.Builder(this)
+            .setTitle("检测更新失败")
+            .setMessage("无法连接 GitHub Releases：${error.message.orEmpty()}\n\n可直接打开发布页查看最新版本。")
+            .setPositiveButton("打开 Releases") { _, _ -> openUrl(releasesUrl) }
+            .setNegativeButton("关闭", null)
+            .show()
+    }
+
+    private fun downloadAndInstall(apkUrl: String) {
+        val dm = getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
+        val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+        if (dm == null || dir == null) {
+            openUrl(apkUrl)
+            return
+        }
+        runCatching { File(dir, updateFileName).takeIf { it.exists() }?.delete() }
+        try {
+            val request = DownloadManager.Request(Uri.parse(apkUrl)).apply {
+                setTitle("飞雪TV 更新包")
+                setDescription("下载完成后自动弹出安装")
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setMimeType("application/vnd.android.package-archive")
+                setDestinationInExternalFilesDir(
+                    this@SettingsActivity, Environment.DIRECTORY_DOWNLOADS, updateFileName
+                )
+            }
+            updateDownloadId = dm.enqueue(request)
+            toast("已开始下载更新包，完成后自动弹出安装")
+        } catch (e: Exception) {
+            openUrl(apkUrl)
+        }
+    }
+
+    private fun installApk(file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            val install = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(install)
+        } catch (e: Exception) {
+            AlertDialog.Builder(this)
+                .setTitle("请手动安装")
+                .setMessage("系统未能自动打开安装界面，可到「版本发布页」下载 APK 后安装。")
+                .setPositiveButton("打开发布页") { _, _ -> openUrl(releasesUrl) }
+                .setNegativeButton("关闭", null)
+                .show()
+        }
+    }
+
+    private fun openUrl(url: String) {
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure { toast("无法打开链接：$url") }
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()

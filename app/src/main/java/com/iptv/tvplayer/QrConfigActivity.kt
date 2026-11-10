@@ -19,6 +19,12 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
  */
 class QrConfigActivity : AppCompatActivity() {
 
+    companion object {
+        /** 传入 MODE_LOGS 时二维码指向日志分享页，而不是配置首页 */
+        const val EXTRA_MODE = "mode"
+        const val MODE_LOGS = "logs"
+    }
+
     private lateinit var server: WebConfigServer
     private lateinit var statusView: TextView
 
@@ -36,8 +42,23 @@ class QrConfigActivity : AppCompatActivity() {
         pinView.text = pin
 
         val ip = WebConfigServer.localIp()
-        val url = "http://$ip:${Prefs.WEB_CONFIG_PORT}/?pin=$pin"
+        val logsMode = intent.getStringExtra(EXTRA_MODE) == MODE_LOGS
+        val page = if (logsMode) "/log" else "/"
+        val url = "http://$ip:${Prefs.WEB_CONFIG_PORT}$page?pin=$pin"
         urlView.text = url
+
+        if (logsMode) {
+            findViewById<TextView>(R.id.qrTitle).text = "手机扫码取日志"
+            findViewById<TextView>(R.id.qrSubtitle).text =
+                "扫码后在手机上复制 / 下载日志，再用微信或 QQ 发送"
+            findViewById<TextView>(R.id.qrSteps).text =
+                "1　手机与盒子连同一个 WiFi\n" +
+                    "2　用相机 / 微信扫左侧二维码\n" +
+                    "3　手机点「分享 / 复制 / 下载 .txt」\n" +
+                    "4　发到微信或 QQ；按 BACK 返回即关闭服务"
+            qrImage.contentDescription = "日志分享页二维码"
+            statusView.text = "日志已生成，等待手机扫码取回"
+        }
 
         val bitmap = makeQrCode(url)
         if (bitmap != null) {

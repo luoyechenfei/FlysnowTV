@@ -13,6 +13,7 @@
         android:focusable="false"
         app:resize_mode="fit"
         app:show_buffering="never"
+        app:shutter_background_color="@color/bg"
         app:surface_type="surface_view"
         app:use_controller="false" />
 
@@ -44,58 +45,58 @@
          与右上角换台信息卡共用 bg_info_card、等宽等高、同一顶部边距，保证左右对齐。 -->
     <LinearLayout
         android:id="@+id/infoPanel"
-        android:layout_width="340dp"
-        android:layout_height="184dp"
+        android:layout_width="280dp"
+        android:layout_height="152dp"
         android:layout_gravity="top|start"
         android:layout_marginStart="40dp"
         android:layout_marginTop="34dp"
         android:background="@drawable/bg_info_card"
         android:orientation="vertical"
-        android:paddingStart="22dp"
-        android:paddingTop="18dp"
-        android:paddingEnd="22dp"
-        android:paddingBottom="18dp"
+        android:paddingStart="16dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="12dp"
         android:visibility="gone">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="正在播放"
-            android:textColor="#8FB2FF"
-            android:textSize="11sp"
+            android:textColor="#9FC0FF"
+            android:textSize="10sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/channelName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="5dp"
+            android:layout_marginTop="4dp"
             android:ellipsize="end"
             android:maxLines="1"
             android:textColor="@color/text_primary"
-            android:textSize="21sp"
+            android:textSize="17sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/channelMeta"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="4dp"
             android:ellipsize="end"
-            android:lineSpacingExtra="2dp"
+            android:lineSpacingExtra="1dp"
             android:maxLines="2"
             android:textColor="@color/text_secondary"
-            android:textSize="12sp" />
+            android:textSize="10.5sp" />
 
         <TextView
             android:id="@+id/playbackStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="4dp"
             android:ellipsize="end"
             android:maxLines="1"
             android:textColor="#FFC46B"
-            android:textSize="12sp"
+            android:textSize="10.5sp"
             android:visibility="gone" />
 
         <Space
@@ -106,15 +107,15 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#2C3D5C" />
+            android:background="#3A6BB0" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="6dp"
             android:text="OK 节目单　←→ 切换线路　BACK 频道墙"
             android:textColor="@color/text_muted"
-            android:textSize="10.5sp" />
+            android:textSize="9sp" />
     </LinearLayout>
 
     <TextView
@@ -128,7 +129,7 @@
         android:paddingTop="9dp"
         android:paddingEnd="18dp"
         android:paddingBottom="9dp"
-        android:text="OK 节目单　GUIDE 时间轴　←→ 切线路　快退键 回看/时移　BACK 频道墙　MENU 设置"
+        android:text="0-9 数字选台　OK 节目单　GUIDE 时间轴　←→ 切线路　快退键 回看　BACK 频道墙　MENU 设置"
         android:textColor="#C1CFE8"
         android:textSize="11.5sp"
         android:visibility="gone" />
@@ -159,7 +160,7 @@
                 android:layout_height="34dp"
                 android:contentDescription="@string/app_name"
                 android:scaleType="fitCenter"
-                android:src="@drawable/ic_snowflake" />
+                android:src="@drawable/ic_flat_snow" />
 
             <TextView
                 android:id="@+id/countView"
@@ -286,69 +287,80 @@
          共用 bg_info_card 背景与描边，内部字号/行距也统一，保证左右对齐协调。 -->
     <LinearLayout
         android:id="@+id/channelInfoCard"
-        android:layout_width="340dp"
-        android:layout_height="184dp"
+        android:layout_width="280dp"
+        android:layout_height="152dp"
         android:layout_gravity="top|end"
         android:layout_marginTop="34dp"
         android:layout_marginEnd="40dp"
         android:background="@drawable/bg_info_card"
         android:orientation="vertical"
-        android:paddingStart="22dp"
-        android:paddingTop="18dp"
-        android:paddingEnd="22dp"
-        android:paddingBottom="18dp"
+        android:paddingStart="16dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="12dp"
         android:visibility="gone">
 
         <TextView
             android:id="@+id/infoNumber"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#8FB2FF"
-            android:textSize="11sp"
+            android:textColor="#9FC0FF"
+            android:textSize="10sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/infoName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="5dp"
+            android:layout_marginTop="4dp"
             android:ellipsize="end"
             android:maxLines="1"
             android:textColor="@color/text_primary"
-            android:textSize="21sp"
+            android:textSize="17sp"
             android:textStyle="bold" />
 
+        <!-- 当前节目：时间段 + 剩余分钟（参考 TV 播放器信息栏） -->
         <TextView
             android:id="@+id/infoGroup"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/infoProgram"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:ellipsize="end"
-            android:lineSpacingExtra="2dp"
-            android:maxLines="2"
-            android:textColor="#C9D8F5"
-            android:textSize="12sp"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/infoExtra"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="@color/text_secondary"
-            android:textSize="11sp" />
+            android:textColor="#9FC0FF"
+            android:textSize="10sp" />
+
+        <!-- 当前节目名 -->
+        <TextView
+            android:id="@+id/infoProgram"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#EAF1FF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <!-- 下一个节目 -->
+        <TextView
+            android:id="@+id/infoNext"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#C9D8F5"
+            android:textSize="9.5sp"
+            android:visibility="gone" />
+
+        <!-- 分组 / 播放引擎等次要信息：节目单模式下让位给节目信息 -->
+        <TextView
+            android:id="@+id/infoExtra"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone" />
 
         <Space
             android:layout_width="match_parent"
@@ -359,9 +371,220 @@
             android:id="@+id/infoTime"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="#A06BFF"
-            android:textSize="11sp"
+            android:textColor="#8FC6FF"
+            android:textSize="10sp"
             android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- 底部频道信息栏：半透明磨砂底，能透出直播画面。
+         台标 / 频道名 / 线路 / 当前节目与进度 / 一排可直接操作的选择按钮。
+         放在 hintBar 上方（marginBottom 76dp），避免与底部操作提示重叠。 -->
+    <LinearLayout
+        android:id="@+id/bottomInfoBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginStart="40dp"
+        android:layout_marginEnd="40dp"
+        android:layout_marginBottom="76dp"
+        android:background="@drawable/bg_bottom_info"
+        android:orientation="vertical"
+        android:paddingStart="18dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="18dp"
+        android:paddingBottom="12dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:layout_width="52dp"
+                android:layout_height="34dp"
+                android:background="@drawable/bg_logo_plate">
+
+                <ImageView
+                    android:id="@+id/bottomLogo"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="频道台标"
+                    android:padding="4dp"
+                    android:scaleType="fitCenter" />
+
+                <TextView
+                    android:id="@+id/bottomLogoLetter"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:textColor="#EAF1FF"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/bottomName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/text_primary"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/bottomMeta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="#B6CCEF"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/bottomTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#8FC6FF"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/bottomRange"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:textColor="#9FC0FF"
+                android:textSize="10.5sp" />
+
+            <TextView
+                android:id="@+id/bottomProgram"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#EAF1FF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ProgressBar
+                android:id="@+id/bottomProgress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="0dp"
+                android:layout_height="4dp"
+                android:layout_weight="1"
+                android:max="100"
+                android:progressBackgroundTint="#3A6BB0"
+                android:progressTint="#5B9BFF" />
+
+            <TextView
+                android:id="@+id/bottomProgressText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:textColor="#B6CCEF"
+                android:textSize="9.5sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/bottomNext"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#C9D8F5"
+            android:textSize="9.5sp"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/bottomActions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/btnGuide"
+                style="@style/BottomActionButton"
+                android:drawableStart="@drawable/ic_flat_guide"
+                android:text="节目单" />
+
+            <TextView
+                android:id="@+id/btnLine"
+                style="@style/BottomActionButton"
+                android:drawableStart="@drawable/ic_flat_line"
+                android:text="线路 1/1" />
+
+            <TextView
+                android:id="@+id/btnQuality"
+                style="@style/BottomActionButton"
+                android:drawableStart="@drawable/ic_flat_quality"
+                android:text="画质 自动" />
+
+            <TextView
+                android:id="@+id/btnControl"
+                style="@style/BottomActionButton"
+                android:drawableStart="@drawable/ic_flat_pause"
+                android:text="暂停" />
+
+            <TextView
+                android:id="@+id/btnEngine"
+                style="@style/BottomActionButton"
+                android:drawableStart="@drawable/ic_flat_engine"
+                android:text="内核 加速" />
+
+            <TextView
+                android:id="@+id/btnSettings"
+                style="@style/BottomActionButton"
+                android:drawableStart="@drawable/ic_flat_settings"
+                android:text="设置" />
+
+            <TextView
+                android:id="@+id/btnClear"
+                style="@style/BottomActionButton"
+                android:drawableStart="@drawable/ic_flat_clear"
+                android:text="清理缓存" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="end|center_vertical"
+                android:text="MENU 选中按钮　·　←→ 选择　·　OK 确认"
+                android:textColor="#9DB6DE"
+                android:textSize="9.5sp" />
+        </LinearLayout>
     </LinearLayout>
 
     <!-- 节目预约提醒：开播前 1 分钟弹出，按 OK 立即跳台 -->
@@ -448,6 +671,90 @@
             android:text="↑↓ 选台　OK 播放　MENU 收藏　BACK 收起"
             android:textColor="@color/text_muted"
             android:textSize="10.5sp" />
+    </LinearLayout>
+
+    <!-- ============ 数字选台输入浮层（最上层） ============
+         按 0-9 显示正在输入的台号与候选频道，OK 立即跳转、DEL 退格、BACK 取消。 -->
+    <LinearLayout
+        android:id="@+id/numberInputCard"
+        android:layout_width="420dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_neu_plate"
+        android:orientation="vertical"
+        android:paddingStart="28dp"
+        android:paddingTop="20dp"
+        android:paddingEnd="28dp"
+        android:paddingBottom="20dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="数字选台"
+                android:src="@drawable/ic_flat_keypad" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:text="数字选台"
+                android:textColor="@color/text_accent_soft"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="end"
+                android:text="CH 号"
+                android:textColor="@color/text_muted"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/numberInputDigits"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:letterSpacing="0.12"
+            android:textColor="@color/text_primary"
+            android:textSize="50sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/numberInputMatch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="2"
+            android:textColor="@color/text_info"
+            android:textSize="12sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="14dp"
+            android:background="@color/neu_stroke" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:text="OK 立即跳转　·　DEL 退格　·　BACK 取消　·　停止输入自动确认"
+            android:textColor="@color/text_secondary"
+            android:textSize="10sp" />
     </LinearLayout>
 
 </FrameLayout>

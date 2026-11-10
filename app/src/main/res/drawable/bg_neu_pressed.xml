@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 按下 / 内凹态：主体压暗，顶边压暗、底边微亮，形成「按进去」的拟态感 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#C6143876"
+                android:startColor="#C60C2C5C"
+                android:type="linear" />
+            <stroke android:width="1dp" android:color="#335FA8D8" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+    <item android:bottom="2dp" android:left="1dp" android:right="1dp" android:top="2dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#0C8FB2FF"
+                android:startColor="#33000F2C"
+                android:type="linear" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+</layer-list>

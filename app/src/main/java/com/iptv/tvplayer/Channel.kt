@@ -64,4 +64,40 @@ data class Channel(
     fun hasMultiLine(): Boolean = allUrls().size > 1
 
     fun canCatchup(): Boolean = url.startsWith("http", ignoreCase = true)
+
+    /**
+     * 订阅里常混进内置 ExoPlayer 播不了的线路：组播 RTP 转发的裸 TS 流、
+     * 需登录的鉴权接口、无后缀的数字路径等（实测 6384 条线路里只有约 30% 是 .m3u8）。
+     * 这里把最可能可播的 HLS 线路提到主线路，其余按可播性稳定排序；
+     * **不丢弃任何线路**（换源菜单、外部播放器仍能看到全部备用源）。
+     * 只调整顺序，不动频道名 / 分组 / 台标，避免影响收藏与隐藏的稳定标识。
+     */
+    fun withPreferredLine(): Channel {
+        val original = lines()
+        if (original.size < 2) return this
+        val ranked = original.sortedBy { lineScore(it.first) }
+        if (ranked == original) return this
+        return copy(
+            url = ranked.first().first,
+            alternatives = ranked.drop(1).map { it.first },
+            lineLabels = ranked.map { it.second }
+        )
+    }
+
+    companion object {
+        /** 分数越小越可能播得出来；sortedBy 是稳定排序，同分保持订阅原顺序 */
+        private fun lineScore(raw: String): Int {
+            val lower = raw.lowercase()
+            val path = lower.substringBefore('?')
+            return when {
+                path.endsWith(".m3u8") || lower.contains("format=hls") ||
+                    lower.contains("format=m3u8") -> 0
+                path.endsWith(".mp4") || path.endsWith(".ts") ||
+                    path.endsWith(".flv") || path.endsWith(".mkv") -> 1
+                // /rtp/组播IP:端口 这类是 UDP 组播转发的裸 TS 流，内置播放器基本解析不了
+                lower.contains("/rtp/") || lower.contains("/udp/") -> 3
+                else -> 2
+            }
+        }
+    }
 }

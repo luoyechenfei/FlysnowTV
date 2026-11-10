@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 选中态（当前播放 / 当前分组）：低饱和蓝面 + 细亮边 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:left="1dp" android:top="2dp" android:right="1dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/neu_shadow" />
+            <corners android:radius="17dp" />
+        </shape>
+    </item>
+    <item android:bottom="2dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#C61B4C90"
+                android:startColor="#D92C64AE"
+                android:type="linear" />
+            <stroke android:width="1.5dp" android:color="#805B9BFF" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+</layer-list>

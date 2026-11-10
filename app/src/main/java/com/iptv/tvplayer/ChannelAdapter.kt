@@ -29,7 +29,9 @@ class ChannelAdapter(
     private val prefs: Prefs,
     /** fromHover：true = 鼠标/飞鼠悬停触发，false = 遥控器焦点触发 */
     private val onFocus: (Channel?, FrameLayout?, Boolean) -> Unit,
-    private val onToggleFavorite: (Channel) -> Unit
+    private val onToggleFavorite: (Channel) -> Unit,
+    /** 卡片被回收：通知 MainActivity 清掉指向这个 host 的预览状态，避免复用后预览被误判为「已在播」 */
+    private val onRecycled: (FrameLayout) -> Unit
 ) : RecyclerView.Adapter<ChannelAdapter.CardHolder>() {
 
     companion object {
@@ -84,6 +86,7 @@ class ChannelAdapter(
     }
 
     override fun onViewRecycled(holder: CardHolder) {
+        onRecycled(holder.previewHost)
         holder.releasePreviewSurface(force = true)
         super.onViewRecycled(holder)
     }
@@ -185,6 +188,9 @@ class ChannelAdapter(
         }
 
         fun bind(channel: Channel, isCurrent: Boolean) {
+            // host 是 RecyclerView 复用的同一个对象：打上当前频道标记，MainActivity 靠它
+            // 判断「这张卡是不是已经换绑给了别的频道」，避免复用后预览被当成已在播而跳过。
+            previewHost.tag = channel.url
             nameView.text = channel.name
             letterView.text = firstLetter(channel.name)
             officialTag.visibility = if (channel.url.isBlank() && channel.officialUrl != null) {

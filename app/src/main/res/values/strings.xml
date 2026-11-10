@@ -13,6 +13,6 @@
     <string name="action_settings">设置</string>
     <string name="settings_title">设置中心</string>
     <string name="settings_subtitle">接口 · 画质 · 播放器 · 节目单 · 扫码配置</string>
-    <string name="settings_hint">方向键选择　OK / 左右键切换　BACK 返回后设置立即生效　·　长按 OK 收藏频道</string>
+    <string name="settings_hint">方向键选择　OK / 左右键切换　数字键 1-9 跳分类　BACK 返回后设置立即生效</string>
     <string name="qr_title">手机扫码配置</string>
 </resources>

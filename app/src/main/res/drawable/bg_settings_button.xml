@@ -1,29 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 顶部「设置 / GUIDE」按钮：扁平化，聚焦时才提亮，不再用大面积蓝紫渐变 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:state_focused="true">
-        <shape android:shape="rectangle">
-            <gradient
-                android:angle="135"
-                android:endColor="#A06BFF"
-                android:startColor="#4C86FF" />
-            <stroke android:width="2dp" android:color="#D6E4FF" />
-            <corners android:radius="20dp" />
-        </shape>
-    </item>
-    <item android:state_pressed="true">
-        <shape android:shape="rectangle">
-            <gradient
-                android:angle="135"
-                android:endColor="#A06BFF"
-                android:startColor="#4C86FF" />
-            <corners android:radius="20dp" />
-        </shape>
-    </item>
-    <item>
-        <shape android:shape="rectangle">
-            <solid android:color="#19243A" />
-            <stroke android:width="1dp" android:color="#33455F" />
-            <corners android:radius="20dp" />
-        </shape>
-    </item>
+    <item android:drawable="@drawable/bg_neu_focused" android:state_focused="true" />
+    <item android:drawable="@drawable/bg_neu_pressed" android:state_pressed="true" />
+    <item android:drawable="@drawable/bg_neu_raised" />
 </selector>

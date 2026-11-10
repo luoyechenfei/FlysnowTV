@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 在线更新 APK 与日志反馈 .txt 都通过 FileProvider 暴露给系统安装器 / 微信 QQ 分享 -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-files-path
+        name="updates"
+        path="Download/" />
+    <external-files-path
+        name="logs"
+        path="Download/" />
+    <!-- 外部存储不可用时日志会落到 filesDir，这里一并放行 -->
+    <files-path
+        name="internal_logs"
+        path="." />
+    <cache-path
+        name="cache_updates"
+        path="updates/" />
+</paths>
