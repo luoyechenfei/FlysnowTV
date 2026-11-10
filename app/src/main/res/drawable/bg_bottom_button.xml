@@ -1,31 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 底部信息栏操作按钮：小圆角柔光拟态，半透明可透出画面 -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:left="1dp" android:top="2dp" android:right="1dp">
-        <shape android:shape="rectangle">
-            <solid android:color="@color/neu_shadow" />
-            <corners android:radius="11dp" />
-        </shape>
-    </item>
-    <item android:bottom="2dp">
-        <shape android:shape="rectangle">
-            <gradient
-                android:angle="270"
-                android:endColor="#80143674"
-                android:startColor="#B32A5CA4"
-                android:type="linear" />
-            <stroke android:width="1dp" android:color="#4D5FA6F0" />
-            <corners android:radius="10dp" />
-        </shape>
-    </item>
-    <item android:bottom="3dp" android:left="1dp" android:right="1dp" android:top="1dp">
-        <shape android:shape="rectangle">
-            <gradient
-                android:angle="270"
-                android:endColor="#00FFFFFF"
-                android:startColor="#24FFFFFF"
-                android:type="linear" />
-            <corners android:radius="9dp" />
-        </shape>
-    </item>
-</layer-list>
+<!-- 底部信息栏按钮状态：手动 MENU 模式下用 isSelected 高亮当前功能，
+     遥控器焦点 / 鼠标点选也各有对应状态，不依赖系统焦点搜索。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true" android:drawable="@drawable/bg_neu_selected" />
+    <item android:state_focused="true" android:drawable="@drawable/bg_neu_focused" />
+    <item android:state_pressed="true" android:drawable="@drawable/bg_neu_pressed" />
+    <item android:drawable="@drawable/bg_bottom_button_normal" />
+</selector>

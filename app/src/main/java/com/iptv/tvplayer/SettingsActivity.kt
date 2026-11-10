@@ -12,12 +12,15 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -26,9 +29,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import org.json.JSONObject
+import java.io.BufferedInputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.ArrayList
 import java.util.Date
@@ -58,6 +64,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var sourceContainer: LinearLayout
     private lateinit var settingsScroll: ScrollView
     private val rows = ArrayList<Row>()
+    /** 长按 MENU 打开设置页时，残留的重复按键不能把设置页立刻关掉 */
+    private val menuGuardUntil = System.currentTimeMillis() + 2500L
     /** 分类锚点：遥控器按 1-9 直接跳到对应设置分区，不用滚十几屏 */
     private val sectionViews = ArrayList<View>()
     private var templateRow: View? = null
@@ -85,6 +93,11 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        // 页面退出时停掉下载线程，避免后台继续写文件 / 回调已销毁的界面
+        updateCancelled = true
+        runCatching { activeDownload?.disconnect() }
+        runCatching { updateDialog?.dismiss() }
+        updateDialog = null
         if (downloadReceiverRegistered) {
             runCatching { unregisterReceiver(downloadReceiver) }
             downloadReceiverRegistered = false
@@ -126,6 +139,12 @@ class SettingsActivity : AppCompatActivity() {
             return true
         }
         if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_SETTINGS) {
+            // 长按 MENU 进设置时按键仍按着，会继续送 repeat 事件；这些事件若在此处
+            // 直接 finish()，设置页就「闪一下又回到播放页」。启动后 2.5 秒内与所有
+            // repeat 事件一律吞掉，等用户真正重新按 MENU 才返回播放页。
+            if ((event?.repeatCount ?: 0) > 0 || System.currentTimeMillis() < menuGuardUntil) {
+                return true
+            }
             finish()
             return true
         }
@@ -1009,7 +1028,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun showAboutDialog() {
         val version = runCatching {
             packageManager.getPackageInfo(packageName, 0).versionName
-        }.getOrNull().orEmpty().ifBlank { "1.9.1" }
+        }.getOrNull().orEmpty().ifBlank { "1.9.2" }
         val message = buildString {
             append("飞雪TV　·　Android TV 直播播放器\n")
             append("版本 ").append(version).append("\n\n")
@@ -1042,7 +1061,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun showFeedbackDialog() {
         val version = runCatching {
             packageManager.getPackageInfo(packageName, 0).versionName
-        }.getOrNull().orEmpty().ifBlank { "1.9.1" }
+        }.getOrNull().orEmpty().ifBlank { "1.9.2" }
 
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1174,6 +1193,11 @@ class SettingsActivity : AppCompatActivity() {
     private val updateFileName = "FlysnowTV-update.apk"
     private var updateDownloadId = -1L
     private var downloadReceiverRegistered = false
+    /** App 内下载进度对话框；后台线程只通过 runOnUiThread 更新这几个 View */
+    private var updateDialog: AlertDialog? = null
+    @Volatile private var updateCancelled = false
+    @Volatile private var activeDownload: HttpURLConnection? = null
+    private val uiHandler = Handler(Looper.getMainLooper())
 
     private val downloadReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -1292,7 +1316,7 @@ class SettingsActivity : AppCompatActivity() {
                 .setPositiveButton("知道了", null)
                 // 即便是最新版，也允许重新下载安装，方便验证在线更新链路 / 修复损坏安装
                 .setNeutralButton("重新下载安装") { _, _ ->
-                    if (rel.apkUrl.isNotBlank()) downloadAndInstall(rel.apkUrl) else openUrl(releasesUrl)
+                    if (rel.apkUrl.isNotBlank()) downloadAndInstall(rel) else openUrl(releasesUrl)
                 }
                 .setNegativeButton("查看发布页") { _, _ -> openUrl(releasesUrl) }
                 .show()
@@ -1314,7 +1338,7 @@ class SettingsActivity : AppCompatActivity() {
                     title + summary + "\n\n下载完成后会自动弹出安装界面。"
             )
             .setPositiveButton("一键在线更新") { _, _ ->
-                if (rel.apkUrl.isNotBlank()) downloadAndInstall(rel.apkUrl) else openUrl(releasesUrl)
+                if (rel.apkUrl.isNotBlank()) downloadAndInstall(rel) else openUrl(releasesUrl)
             }
             .setNeutralButton("查看发布页") { _, _ -> openUrl(rel.htmlUrl) }
             .setNegativeButton("稍后", null)
@@ -1330,7 +1354,242 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun downloadAndInstall(apkUrl: String) {
+    /**
+     * 在线更新：App 内自下载并实时显示进度（百分比 / 进度条 / 已下载 / 速度 / 剩余时间）。
+     * 旧实现只把任务丢给系统 DownloadManager，界面上毫无反馈，容易被当成「没开始下载」。
+     */
+    private fun downloadAndInstall(rel: ReleaseInfo) {
+        if (rel.apkUrl.isBlank()) {
+            openUrl(releasesUrl)
+            return
+        }
+        runCatching { updateDialog?.dismiss() }
+        updateDialog = null
+        updateCancelled = false
+
+        val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: File(cacheDir, "updates")
+        if (!dir.exists()) dir.mkdirs()
+        val target = File(dir, updateFileName)
+        val part = File(dir, "$updateFileName.part")
+        runCatching { target.delete(); part.delete() }
+
+        val view = layoutInflater.inflate(R.layout.dialog_update_progress, null)
+        val statusText = view.findViewById<TextView>(R.id.updateStatus)
+        val percentText = view.findViewById<TextView>(R.id.updatePercent)
+        val detailText = view.findViewById<TextView>(R.id.updateDetail)
+        val speedText = view.findViewById<TextView>(R.id.updateSpeed)
+        val bar = view.findViewById<ProgressBar>(R.id.updateProgress)
+
+        var dialog: AlertDialog? = null
+        /** 后台线程安全地刷新进度；对话框关闭或页面退出后直接丢弃回调 */
+        fun publish(
+            status: String, percent: Int, downloaded: Long,
+            total: Long, bytesPerSec: Long, indeterminate: Boolean
+        ) {
+            if (updateCancelled || isFinishing || isDestroyed) return
+            runOnUiThread {
+                if (updateCancelled || dialog?.isShowing != true) return@runOnUiThread
+                statusText.text = status
+                bar.isIndeterminate = indeterminate
+                if (indeterminate) {
+                    percentText.text = "--"
+                    detailText.text = "已下载 ${formatSize(downloaded)}"
+                } else {
+                    val p = percent.coerceIn(0, 100)
+                    bar.progress = p
+                    percentText.text = "$p%"
+                    detailText.text = if (total > 0) {
+                        "${formatSize(downloaded)} / ${formatSize(total)}"
+                    } else "已下载 ${formatSize(downloaded)}"
+                }
+                val remain = if (total > 0 && bytesPerSec > 0) {
+                    "　·　预计剩余 ${formatEta((total - downloaded).coerceAtLeast(0) / bytesPerSec)}"
+                } else ""
+                speedText.text = if (bytesPerSec > 0) {
+                    "${formatSize(bytesPerSec)}/s$remain"
+                } else "正在建立连接…"
+            }
+        }
+
+        // Release 说明里写了 SHA-256，下载完顺手校验，避免装到半截包
+        val expectedSha = Regex("""SHA-256[：:]\s*`?([a-fA-F0-9]{64})`?""")
+            .find(rel.body)?.groupValues?.get(1)?.lowercase(Locale.ROOT)
+
+        dialog = AlertDialog.Builder(this)
+            .setTitle("正在更新到 ${rel.tag.ifBlank { "最新版本" }}")
+            .setView(view)
+            .setCancelable(false)
+            .setNegativeButton("取消下载") { _, _ ->
+                updateCancelled = true
+                runCatching { activeDownload?.disconnect() }
+                toast("已取消更新包下载")
+            }
+            .show()
+        updateDialog = dialog
+
+        Thread {
+            var conn: HttpURLConnection? = null
+            try {
+                publish("正在连接下载服务器…", 0, 0, rel.apkSize, 0, true)
+                conn = openDownloadConnection(rel.apkUrl)
+                val headerSize = conn.getHeaderField("Content-Length")?.toLongOrNull() ?: -1L
+                val total = if (headerSize > 0) headerSize else rel.apkSize
+                var downloaded = 0L
+                var lastUi = 0L
+                var lastSampleAt = System.currentTimeMillis()
+                var lastSampleBytes = 0L
+                var speed = 0L
+                BufferedInputStream(conn.inputStream, 8192).use { input ->
+                    FileOutputStream(part).use { out ->
+                        val buf = ByteArray(8192)
+                        while (!updateCancelled) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            out.write(buf, 0, n)
+                            downloaded += n
+                            val now = System.currentTimeMillis()
+                            if (now - lastUi >= 150) {
+                                val elapsed = now - lastSampleAt
+                                if (elapsed >= 500) {
+                                    val instant = (downloaded - lastSampleBytes) * 1000 /
+                                        elapsed.coerceAtLeast(1)
+                                    speed = if (speed == 0L) instant else (speed * 7 + instant * 3) / 10
+                                    lastSampleAt = now
+                                    lastSampleBytes = downloaded
+                                }
+                                val pct = if (total > 0) {
+                                    (downloaded * 100 / total).toInt().coerceIn(0, 99)
+                                } else -1
+                                publish("正在下载更新包…", pct, downloaded, total, speed, total <= 0)
+                                lastUi = now
+                            }
+                        }
+                        out.flush()
+                    }
+                }
+                if (updateCancelled) {
+                    runCatching { part.delete() }
+                    return@Thread
+                }
+                conn.disconnect()
+                conn = null
+
+                // 完整性校验：长度 → APK(ZIP) 文件头 → Release 说明中的 SHA-256（若提供）
+                publish("正在校验更新包…", 100, downloaded,
+                    if (total > 0) total else downloaded, 0, false)
+                if (total > 0 && part.length() != total) {
+                    throw IllegalStateException(
+                        "文件不完整（${formatSize(part.length())} / ${formatSize(total)}）"
+                    )
+                }
+                val head = ByteArray(2)
+                val read = part.inputStream().use { it.read(head) }
+                if (read != 2 || head[0] != 'P'.code.toByte() || head[1] != 'K'.code.toByte()) {
+                    throw IllegalStateException("下载内容不是有效的 APK 安装包")
+                }
+                if (!expectedSha.isNullOrBlank() && !sha256(part).equals(expectedSha, true)) {
+                    throw IllegalStateException("安装包校验失败（SHA-256 不匹配）")
+                }
+                runCatching { target.delete() }
+                if (!part.renameTo(target)) {
+                    part.copyTo(target, overwrite = true)
+                    part.delete()
+                }
+
+                publish("下载完成 · 校验通过", 100, target.length(), target.length(), 0, false)
+                uiHandler.postDelayed(object : Runnable {
+                    override fun run() {
+                        if (isFinishing || isDestroyed) return
+                        runCatching { dialog?.dismiss() }
+                        updateDialog = null
+                        installApk(target)
+                    }
+                }, 700L)
+            } catch (e: Exception) {
+                runCatching { conn?.disconnect() }
+                runCatching { part.delete() }
+                if (updateCancelled || isFinishing || isDestroyed) return@Thread
+                val message = when (e) {
+                    is java.io.InterruptedIOException -> "连接被中断，请检查网络后重试"
+                    else -> e.message ?: "未知错误"
+                }
+                runOnUiThread {
+                    runCatching { dialog?.dismiss() }
+                    updateDialog = null
+                    showDownloadFailure(rel, message)
+                }
+            } finally {
+                runCatching { conn?.disconnect() }
+                activeDownload = null
+            }
+        }.start()
+    }
+
+    /** 手动跟随 302：GitHub Release 附件会跳到带签名的 CDN 域名 */
+    private fun openDownloadConnection(urlText: String): HttpURLConnection {
+        var url = URL(urlText)
+        for (hop in 0 until 6) {
+            if (updateCancelled) throw InterruptedException()
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15000
+                readTimeout = 30000
+                instanceFollowRedirects = false
+                setRequestProperty("User-Agent", "FlysnowTV-Android")
+                setRequestProperty("Accept", "*/*")
+                // 禁止自动 gzip：否则 Content-Length 是压缩后长度，落盘字节数会对不上，
+                // 导致「文件不完整」误判（APK 本身已是压缩包，无需再压）
+                setRequestProperty("Accept-Encoding", "identity")
+            }
+            activeDownload = conn
+            val code = conn.responseCode
+            if (code == 200) return conn
+            val location = conn.getHeaderField("Location")
+            conn.disconnect()
+            if (code !in 300..399 || location.isNullOrBlank()) {
+                throw IllegalStateException("下载服务器返回 HTTP $code")
+            }
+            url = URL(url, location)
+        }
+        throw IllegalStateException("下载重定向次数过多")
+    }
+
+    private fun sha256(file: File): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buf = ByteArray(8192)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                md.update(buf, 0, n)
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun formatSize(bytes: Long): String = when {
+        bytes >= 1024L * 1024 -> "%.2f MB".format(bytes / 1024.0 / 1024.0)
+        bytes >= 1024L -> "%.0f KB".format(bytes / 1024.0)
+        else -> "$bytes B"
+    }
+
+    private fun formatEta(seconds: Long): String = when {
+        seconds <= 0 -> "即将完成"
+        seconds < 60 -> "约 $seconds 秒"
+        else -> "约 ${seconds / 60} 分 ${seconds % 60} 秒"
+    }
+
+    private fun showDownloadFailure(rel: ReleaseInfo, message: String) {
+        AlertDialog.Builder(this)
+            .setTitle("更新包下载失败")
+            .setMessage("$message\n\n可重试 App 内下载，或改用系统下载（通知栏显示进度），也可到发布页手动下载。")
+            .setPositiveButton("重试") { _, _ -> downloadAndInstall(rel) }
+            .setNeutralButton("系统下载") { _, _ -> downloadWithSystemManager(rel.apkUrl) }
+            .setNegativeButton("打开发布页") { _, _ -> openUrl(releasesUrl) }
+            .show()
+    }
+
+    /** 兜底：部分盒子的网络栈无法直连 CDN 时，退回系统下载管理器 */
+    private fun downloadWithSystemManager(apkUrl: String) {
         val dm = getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
         val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
         if (dm == null || dir == null) {
@@ -1349,7 +1608,7 @@ class SettingsActivity : AppCompatActivity() {
                 )
             }
             updateDownloadId = dm.enqueue(request)
-            toast("已开始下载更新包，完成后自动弹出安装")
+            toast("已改用系统下载，进度请在通知栏查看")
         } catch (e: Exception) {
             openUrl(apkUrl)
         }

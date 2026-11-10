@@ -28,6 +28,15 @@ class GroupAdapter(private val onSelect: (String?) -> Unit) :
         notifyDataSetChanged()
     }
 
+    /** 选中项在分组条中的位置；默认落在「最近观看」时把它滚进可见区域 */
+    fun selectedPosition(): Int {
+        val key = selected ?: ""
+        return items.indexOfFirst { it == key }.coerceAtLeast(0)
+    }
+
+    /** 换源后旧分组可能已不存在，用来判断是否需要回退 */
+    fun hasGroup(group: String?): Boolean = group == null || items.contains(group)
+
     override fun getItemCount(): Int = items.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ChipHolder {

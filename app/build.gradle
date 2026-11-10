@@ -11,8 +11,8 @@ android {
         applicationId "com.iptv.tvplayer"
         minSdk 21
         targetSdk 34
-        versionCode 12
-        versionName "1.9.1"
+        versionCode 13
+        versionName "1.9.2"
     }
 
     signingConfigs {

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 底部信息栏操作按钮：小圆角柔光拟态，半透明可透出画面（默认态） -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:left="1dp" android:top="2dp" android:right="1dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/neu_shadow" />
+            <corners android:radius="11dp" />
+        </shape>
+    </item>
+    <item android:bottom="2dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#80143674"
+                android:startColor="#B32A5CA4"
+                android:type="linear" />
+            <stroke android:width="1dp" android:color="#4D5FA6F0" />
+            <corners android:radius="10dp" />
+        </shape>
+    </item>
+    <item android:bottom="3dp" android:left="1dp" android:right="1dp" android:top="1dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#00FFFFFF"
+                android:startColor="#24FFFFFF"
+                android:type="linear" />
+            <corners android:radius="9dp" />
+        </shape>
+    </item>
+</layer-list>
