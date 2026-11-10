@@ -581,7 +581,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:gravity="end|center_vertical"
-                android:text="←→ 选择　·　OK 确认　·　BACK 收起　·　长按 MENU 设置"
+                android:text="↑↓←→ 选择　·　OK 确认　·　BACK 收起　·　长按 MENU 设置"
                 android:textColor="#9DB6DE"
                 android:textSize="9.5sp" />
         </LinearLayout>

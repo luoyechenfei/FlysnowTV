@@ -247,6 +247,16 @@ class MainActivity : AppCompatActivity() {
     /** 手动模式下高亮的功能序号（默认落在「线路」），不依赖 Android View 焦点 */
     private var bottomActionIndex = 1
 
+    /**
+     * 本次 OK 的 down 已被 Activity 消费。OK 的 up 必须一并吞掉：
+     * 否则 framework 会把抬键再转成一次对「当前持有焦点 View」的点击，
+     * 同一次 OK 就会执行两遍（例如先切线路、又弹出节目单 / 把 EPG 选台覆盖回原频道）。
+     */
+    private var consumedOkDown = false
+
+    /** 播放态短按 OK 等抬键才打开节目单；长按时由 onKeyLongPress 撤销并改为收藏 */
+    private var pendingShowEpgOnOkUp = false
+
     /** 统一的 5 秒倒计时：到点把左上「正在播放」、右上换台卡、底部信息栏一起收起 */
     private val hideInfoCardRunnable = Runnable { hideTransientInfo() }
     private val hideReservationRunnable = Runnable {
@@ -652,7 +662,7 @@ class MainActivity : AppCompatActivity() {
                     append(name)
                     append("\n")
                     append(channel?.allUrls()?.getOrNull(currentLineIndex).orEmpty())
-                    if (lines > 1) append("\n\n按 ← → 快速切线路，长按 OK 选择换源（共 $lines 条）")
+                    if (lines > 1) append("\n\n按 ← → 快速切线路，短按 MENU →「线路」按来源挑选（共 $lines 条）")
                     else append("\n\n确认源是否可用，或在设置里检查接口地址")
                     append("\n\n订阅里若含组播 TS / 需登录的线路，内置播放器无法解析，请换线路或开启外部播放器回退")
                     if (timeshiftStart != null) append("\n回看失败多为源不支持时移，按快退键回到直播")
@@ -1343,6 +1353,8 @@ class MainActivity : AppCompatActivity() {
      * 换源菜单：多订阅里同名频道已合并成一张卡片，这里列出全部线路
      * （主线路在最前，其余为其他订阅的备用源），可直接选一个播。
      */
+    /** 1.9.3 起长按 OK 改为收藏，换源统一走底部信息栏「线路」按钮；此菜单保留为备用入口 */
+    @Suppress("unused")
     private fun showLinePicker() {
         if (linePickerOpen) return
         val channel = currentChannel ?: return
@@ -1739,6 +1751,12 @@ class MainActivity : AppCompatActivity() {
 
     /** 手动模式下的按键分发：返回 true 表示已被信息栏消费 */
     private fun handleManualBottomKey(keyCode: Int, event: KeyEvent?): Boolean {
+        // 节目单已打开时手动模式一律让位：方向键/OK 交回 EPG 选台逻辑，
+        // 避免用户在节目单里选了 15 台，按键却仍被底部栏吃掉。
+        if (epgVisible) {
+            clearManualBottomMode()
+            return false
+        }
         if (!manualBottomMode || !::bottomInfoBar.isInitialized ||
             bottomInfoBar.visibility != View.VISIBLE
         ) return false
@@ -1777,11 +1795,17 @@ class MainActivity : AppCompatActivity() {
         scheduleInfoHide()
     }
 
-    /** OK 直接执行高亮功能；节目单 / 设置会切到别的界面，先退出手动模式 */
+    /**
+     * OK 只执行当前高亮的那一个功能。执行完立刻退出手动模式：
+     * 线路 / 画质 / 内核会弹出选择对话框，节目单 / 设置会切界面，
+     * 若继续保持手动模式，这些界面里的方向键和 OK 仍会被底部栏抢走。
+     * 想连续操作再短按一次 MENU 即可（会保留上次高亮位置）。
+     */
     private fun runManualBottomAction() {
         val i = bottomActionIndex
-        if (i == 0 || i == 5) clearManualBottomMode()
-        bottomActionButtons().getOrNull(i)?.performClick()
+        val btn = bottomActionButtons().getOrNull(i) ?: return
+        clearManualBottomMode()
+        btn.performClick()
         scheduleInfoHide()
     }
 
@@ -1953,6 +1977,11 @@ class MainActivity : AppCompatActivity() {
             toast("还没有频道，长按 MENU 3 秒进设置添加播放源")
             return
         }
+        // 打开节目单前必须退出「手动 MENU 操作模式」并收起三处信息：
+        // 否则底部栏会继续抢走上下左右 / OK，节目单里的选台完全无效，
+        // 甚至会再次 showEpg() 把选中位置重置回当前频道。
+        clearManualBottomMode()
+        hideTransientInfo()
         epgVisible = true
         epgPanel.visibility = View.VISIBLE
         epgTitleView.text = if (epg.isLoaded) "节目单 · XMLTV" else "节目单 · 频道清单"
@@ -2058,6 +2087,17 @@ class MainActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------ 按键
 
+    private fun isOkKey(keyCode: Int): Boolean =
+        keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+            keyCode == KeyEvent.KEYCODE_ENTER ||
+            keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+
+    /** Activity 已在 down 消费掉这次按键时，连 up 也一并吞掉 */
+    private fun consumeOk(keyCode: Int): Boolean {
+        if (isOkKey(keyCode)) consumedOkDown = true
+        return true
+    }
+
     /** MENU 抬键时若 3 秒长按还没触发，就执行短按：呼出底部信息栏 */
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_SETTINGS) {
@@ -2066,13 +2106,30 @@ class MainActivity : AppCompatActivity() {
             menuLongPressFired = false
             return true
         }
+        // down 已被 Activity 处理的 OK，抬键绝不能再交给 framework：
+        // 否则它会对「当前持有焦点的 View」再触发一次 click，
+        // 旧版就是这样出现「按 OK 弹出节目单」「EPG 选 15 又跳回 13」的。
+        if (isOkKey(keyCode) && consumedOkDown) {
+            consumedOkDown = false
+            if (pendingShowEpgOnOkUp) {
+                pendingShowEpgOnOkUp = false
+                showEpg()
+            }
+            return true
+        }
         return super.onKeyUp(keyCode, event)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        // 每次 OK 按下都从干净状态开始，避免上一次的残留标志吞掉本次抬键
+        if (isOkKey(keyCode)) {
+            consumedOkDown = false
+            pendingShowEpgOnOkUp = false
+        }
+
         // 手动按过 MENU 后，上下左右 / OK / BACK 全部由底部信息栏接管；
         // 非手动（换台自动显示）时这里直接放行，方向键保持换台 / 切线路。
-        if (handleManualBottomKey(keyCode, event)) return true
+        if (handleManualBottomKey(keyCode, event)) return consumeOk(keyCode)
 
         // 数字选台输入中：OK 立即跳转、DEL 退格、BACK 取消；
         // 必须放在播放态快捷键之前，否则上下/左右/OK 会把输入过程抢走。
@@ -2085,7 +2142,7 @@ class MainActivity : AppCompatActivity() {
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
                 KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                     if (event == null || event.repeatCount == 0) commitNumber()
-                    return true
+                    return consumeOk(keyCode)
                 }
                 KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
                     cancelNumberInput()
@@ -2103,14 +2160,22 @@ class MainActivity : AppCompatActivity() {
             // 长按已触发后，后续重复按键全部吞掉，避免再排一次「打开设置」
             return true
         }
-        // 信息栏可见时，任何遥控器操作都算一次交互，重置 8 秒隐藏计时。
+        // 信息栏可见时，任何遥控器操作都算一次交互，重置 5 秒隐藏计时。
         // 非手动模式不接管方向键：换台 / 切线路等原有快捷键保持不变。
         if (::bottomInfoBar.isInitialized && bottomInfoBar.visibility == View.VISIBLE) {
             scheduleInfoHide()
         }
-        // 让 OK 键参与长按跟踪：长按 OK = 打开换源菜单
-        if (event != null && (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)) {
+        // 让 OK 键参与长按跟踪：长按 OK = 收藏当前频道（见 onKeyLongPress）
+        if (event != null && isOkKey(keyCode) && event.repeatCount == 0) {
             event.startTracking()
+        }
+        // 长按产生的重复 DOWN 一律吞掉，绝不落到「OK 打开节目单」等短按行为。
+        // 墙面模式除外：卡片长按收藏由 ChannelAdapter 自己的定时器处理。
+        if (isOkKey(keyCode) && event != null &&
+            (event.repeatCount >= 1 || event.isLongPress) &&
+            (mode == MODE_PLAYER || epgVisible)
+        ) {
+            return consumeOk(keyCode)
         }
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
@@ -2188,14 +2253,10 @@ class MainActivity : AppCompatActivity() {
                 channel?.let { toggleFavorite(it) }
                 return true
             }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                // 播放器里长按 OK：直接打开换源菜单，在多个订阅的线路里挑一个
-                if (event != null && (event.repeatCount >= 1 || event.isLongPress) &&
-                    mode == MODE_PLAYER && !epgVisible
-                ) {
-                    showLinePicker()
-                    return true
-                }
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                // 长按的重复 DOWN 已在上一段吞掉，这里只处理短按 OK。
+                // 换源统一用底部信息栏「线路」按钮；长按 OK 改为收藏。
                 // 预约提醒浮层显示时，OK 直接跳到预约频道
                 val reserved = reservationTarget
                 if (reserved != null) {
@@ -2204,21 +2265,23 @@ class MainActivity : AppCompatActivity() {
                     handler.removeCallbacks(hideReservationRunnable)
                     allChannels.firstOrNull { it.stableKey() == reserved }?.let {
                         playChannel(it)
-                        return true
+                        return consumeOk(keyCode)
                     }
                 }
                 when {
                     epgVisible -> {
+                        // 只按当前高亮频道换台一次；抬键被吞掉，不会被列表行再点一次覆盖回原频道
                         pickEpgChannel(epgIndex)
-                        return true
+                        return consumeOk(keyCode)
                     }
                     mode == MODE_PLAYER -> {
-                        showEpg()
-                        return true
+                        // 延到抬键再打开：长按时由 onKeyLongPress 撤销并改成收藏
+                        pendingShowEpgOnOkUp = true
+                        return consumeOk(keyCode)
                     }
                     allChannels.isEmpty() -> {
                         openSettings()
-                        return true
+                        return consumeOk(keyCode)
                     }
                 }
             }
@@ -2239,11 +2302,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onKeyLongPress(keyCode: Int, event: KeyEvent?): Boolean {
-        if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) &&
-            mode == MODE_PLAYER && !epgVisible
-        ) {
-            showLinePicker()
-            return true
+        // 长按 OK = 收藏当前频道。撤销「短按打开节目单」，避免长按后先弹节目单。
+        // 墙面由 ChannelAdapter 自己的长按定时器处理，这里不接管，防止重复 toggle。
+        if (isOkKey(keyCode) && mode == MODE_PLAYER && !epgVisible) {
+            pendingShowEpgOnOkUp = false
+            currentChannel?.let {
+                toggleFavorite(it)
+                return true
+            }
         }
         return super.onKeyLongPress(keyCode, event)
     }

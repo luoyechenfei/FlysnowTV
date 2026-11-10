@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 底部信息栏按钮文字 / 图标：常态略压暗，选中时纯白提亮，进一步拉开对比度 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true" android:color="#FFFFFFFF" />
+    <item android:state_pressed="true" android:color="#FFFFFFFF" />
+    <item android:state_focused="true" android:color="#FFFFFFFF" />
+    <item android:color="@color/text_secondary" />
+</selector>

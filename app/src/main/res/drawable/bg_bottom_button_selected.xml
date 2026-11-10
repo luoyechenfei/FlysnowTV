@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 手动 MENU 模式下「当前选中功能」专用高对比态：
+     亮蓝实心面 + 白色亮边 + 外发光 + 顶部高光，与默认半透明暗面拉开明显层次，
+     电视遥控器移动时一眼就能看出落在哪个按钮上。 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 外发光底圈 -->
+    <item android:left="1dp" android:top="2dp" android:right="1dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#9900A8FF" />
+            <corners android:radius="13dp" />
+        </shape>
+    </item>
+    <!-- 主体：明显提亮的实心蓝渐变 + 白色描边 -->
+    <item android:bottom="2dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#F02E78DD"
+                android:startColor="#FF69B6FF"
+                android:type="linear" />
+            <stroke android:width="2.5dp" android:color="#FFFFFFFF" />
+            <corners android:radius="11dp" />
+        </shape>
+    </item>
+    <!-- 顶部白色高光，强化「亮起来」的观感 -->
+    <item
+        android:bottom="4dp"
+        android:left="2dp"
+        android:right="2dp"
+        android:top="2dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#00FFFFFF"
+                android:startColor="#66FFFFFF"
+                android:type="linear" />
+            <corners android:radius="9dp" />
+        </shape>
+    </item>
+</layer-list>

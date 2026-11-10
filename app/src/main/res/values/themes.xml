@@ -12,21 +12,25 @@
         <item name="android:textColorHint">@color/text_muted</item>
     </style>
 
-    <!-- 底部信息栏的操作按钮：半透明、可聚焦，遥控器选中时由 bg_bottom_button 高亮 -->
+    <!-- 底部信息栏的操作按钮：半透明、鼠标可点但「不可聚焦」。
+         遥控器选中完全由 MainActivity 的 isSelected 高亮驱动；若按钮可聚焦，
+         OK 抬键会被 framework 再转成一次对焦点按钮的点击，导致一次 OK 执行两遍。 -->
     <style name="BottomActionButton">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginEnd">8dp</item>
         <item name="android:background">@drawable/bg_bottom_button</item>
         <item name="android:clickable">true</item>
-        <item name="android:focusable">true</item>
+        <item name="android:focusable">false</item>
+        <item name="android:focusableInTouchMode">false</item>
         <item name="android:paddingStart">14dp</item>
         <item name="android:paddingTop">7dp</item>
         <item name="android:paddingEnd">14dp</item>
         <item name="android:paddingBottom">7dp</item>
         <item name="android:gravity">center_vertical</item>
         <item name="android:drawablePadding">6dp</item>
-        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textColor">@color/bottom_button_text</item>
+        <item name="android:drawableTint">@color/bottom_button_text</item>
         <item name="android:textSize">10.5sp</item>
         <item name="android:textStyle">bold</item>
     </style>
