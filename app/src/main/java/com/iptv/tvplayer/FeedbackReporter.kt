@@ -33,7 +33,7 @@ object FeedbackReporter {
     private fun version(context: Context): String = runCatching {
         @Suppress("DEPRECATION")
         context.packageManager.getPackageInfo(context.packageName, 0).versionName
-    }.getOrNull().orEmpty().ifBlank { "1.8" }
+    }.getOrNull().orEmpty().ifBlank { "1.9" }
 
     /** 分享出去的正文：摘要 + 日志开头，避免微信 / QQ 对超长文本截断后丢失关键信息 */
     fun shareText(context: Context, file: File, note: String): String = buildString {

@@ -1,8 +1,8 @@
 # 飞雪TV（FlysnowTV）· Android TV 版
 
-现代玻璃拟态深色海报墙风格的电视直播播放器。原生 Android（Kotlin + Media3/ExoPlayer），可直接装到安卓电视盒子自用测试。
+主流深蓝主调、玻璃拟态海报墙风格的电视直播播放器。原生 Android（Kotlin + Media3/ExoPlayer），可直接装到安卓电视盒子自用测试。
 
-> 当前版本 **1.8（versionCode 10）**，包名 `com.iptv.tvplayer`，minSdk 21 / targetSdk 34。
+> 当前版本 **1.9（versionCode 11）**，包名 `com.iptv.tvplayer`，minSdk 21 / targetSdk 34。
 > 本仓库只包含源码：编译产物与 release 签名密钥按 `.gitignore` 排除，请按「重新打包」一节自行构建 `FlysnowTV.apk`。
 
 ## 1.3 新增：订阅链接一键导入 + 盒子自适应 + 日志 + 白色雪花 LOGO
@@ -181,7 +181,7 @@ https://www.example.com/iptv6.txt
 | 播放引擎 | 内置标准 / **内置加速（默认）** / VLC / MX / Kodi / 系统播放器 | 加速模式 8 秒缓冲 + 直播追帧 + HLS 免分片预加载；未安装自动回退内置 |
 | 台标来源 | 自动 / 只用内置 / 自定义 / 关闭 + 地址模板 | 自动优先用接口台标，可自定义地址模板 |
 | **播放诊断 / 盒子排障** | 设备自动分级、查看诊断日志、生成日志文件、解码失败自动换播放器 | 查看 TLS / 接口 / 播放错误；导出 `FlysnowTV_log_*.txt` 供 `adb pull` |
-| 关于 | 关于 飞雪TV | 版本号、版权与构建信息 |
+| 关于 | 关于 飞雪TV | 版本号、版权、项目主页、检测更新与日志反馈 |
 
 > 画质设置只对**多码率 HLS** 有意义；外部播放器无法携带自定义请求头，也不受 App 内画质设置约束。
 
