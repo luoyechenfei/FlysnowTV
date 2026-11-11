@@ -1028,7 +1028,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun showAboutDialog() {
         val version = runCatching {
             packageManager.getPackageInfo(packageName, 0).versionName
-        }.getOrNull().orEmpty().ifBlank { "1.9.4" }
+        }.getOrNull().orEmpty().ifBlank { "1.9.5" }
         val message = buildString {
             append("飞雪TV　·　Android TV 直播播放器\n")
             append("版本 ").append(version).append("\n\n")
@@ -1061,7 +1061,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun showFeedbackDialog() {
         val version = runCatching {
             packageManager.getPackageInfo(packageName, 0).versionName
-        }.getOrNull().orEmpty().ifBlank { "1.9.4" }
+        }.getOrNull().orEmpty().ifBlank { "1.9.5" }
 
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL

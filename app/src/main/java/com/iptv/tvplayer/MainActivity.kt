@@ -4,10 +4,13 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.net.TrafficStats
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
+import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -66,8 +69,16 @@ class MainActivity : AppCompatActivity() {
 
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 12; Android TV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        /** 换台 / 手动 MENU 呼出的左上、右上、底部信息统一 5 秒后一起收起 */
+        /** 换台 / 手动 MENU 呼出的右上信息卡、底部信息栏统一 5 秒后一起收起 */
         private const val INFO_HIDE_DELAY = 5000L
+        /** 实时网速采样间隔（毫秒） */
+        private const val NET_SPEED_INTERVAL = 1000L
+        /** 连续缓冲超过 2 秒视为卡顿：先降清晰度重试，降到最低仍卡才换源 */
+        private const val STALL_SWITCH_DELAY = 2000L
+        /** 两档降级之间的冷却：留 4 秒观察降档后能否恢复 */
+        private const val STALL_DOWNGRADE_COOLDOWN = 4_000L
+        /** 两次卡顿换源之间的冷却，避免网络抖动时来回切 */
+        private const val STALL_SWITCH_COOLDOWN = 15_000L
         private const val NUMBER_TIMEOUT = 2500L
         private const val NUMBER_MAX_DIGITS = 4
         /** 长按 MENU 超过 3 秒才进设置中心；短按只呼出底部信息栏 */
@@ -93,9 +104,6 @@ class MainActivity : AppCompatActivity() {
 
     // 播放层
     private lateinit var playerView: PlayerView
-    private lateinit var infoPanel: View
-    private lateinit var channelNameView: TextView
-    private lateinit var channelMetaView: TextView
     private lateinit var statusView: TextView
     private lateinit var hintView: TextView
     private lateinit var loadingView: ProgressBar
@@ -141,6 +149,17 @@ class MainActivity : AppCompatActivity() {
     private var currentLineIndex = 0
     private var lineSwitches = 0
     private var linePickerOpen = false
+    /** 卡顿自动降级 / 切源：上次触发时间、检查是否已排队、缓冲检查任务 */
+    private var lastStallSwitchMs = 0L
+    private var lastStallDowngradeMs = 0L
+    private var stallCheckPending = false
+    private val stallCheckRunnable = Runnable { onPlaybackStalled() }
+    /** 实时网速有效样本数（起播后至少 2 个样本才参与清晰度决策） */
+    private var netSpeedSamples = 0
+    /** 按实时网速动态设定的视频码率上限；-1 表示尚未设定 */
+    private var adaptiveBitrateCap = -1
+    /** 升档需连续稳定若干秒，降档立即生效，避免轨道反复横跳 */
+    private var adaptiveUpgradeSamples = 0
     private var timeshiftStart: Long? = null
     private var lastReminderKey: String? = null
     private var reservationTarget: String? = null
@@ -191,15 +210,17 @@ class MainActivity : AppCompatActivity() {
     private var previewChannel: Channel? = null
     private var previewRetryPending = false
 
-    // 右上角换台信息卡
+    // 右上角唯一信息卡（1.9.5 起合并原左上「正在播放」卡）
     private lateinit var channelInfoCard: View
     private lateinit var infoNumberView: TextView
     private lateinit var infoNameView: TextView
+    private lateinit var infoMetaView: TextView
     private lateinit var infoGroupView: TextView
     private lateinit var infoProgramView: TextView
     private lateinit var infoNextView: TextView
     private lateinit var infoExtraView: TextView
     private lateinit var infoTimeView: TextView
+    private lateinit var infoNetSpeedView: TextView
     private lateinit var reservationCard: TextView
 
     // 底部频道信息栏（半透明）：台标 / 线路 / 节目 / 进度 / 一排可直接切换当前画面的按钮
@@ -234,7 +255,6 @@ class MainActivity : AppCompatActivity() {
     private var epgIndex = 0
 
     private val commitNumberRunnable = Runnable { commitNumber() }
-    private val hideOverlayRunnable = Runnable { hideTransientInfo() }
 
     // MENU 长短按：短按在 onKeyUp 里呼出底部信息栏，长按 3 秒才打开设置
     private var menuLongPressFired = false
@@ -274,8 +294,30 @@ class MainActivity : AppCompatActivity() {
     private fun favoriteTargetForLongPress(): Channel? =
         if (epgVisible) allChannels.getOrNull(epgIndex) else currentChannel
 
-    /** 统一的 5 秒倒计时：到点把左上「正在播放」、右上换台卡、底部信息栏一起收起 */
+    /** 统一的 5 秒倒计时：到点把右上信息卡、底部信息栏一起收起 */
     private val hideInfoCardRunnable = Runnable { hideTransientInfo() }
+
+    // ---- 实时网速（1.9.5）：每 1 秒采样下行字节数，平滑后显示在信息卡底部 ----
+    private var netSpeedRunning = false
+    private var lastRxBytes = -1L
+    private var lastTotalRxBytes = -1L
+    private var lastRxSampleMs = 0L
+    private var smoothedBps = 0.0
+    /** 观测到的峰值下行速率（缓慢衰减）：避免降码率后测得速率变低、清晰度再也升不回去 */
+    private var peakBps = 0.0
+    private var uidRxZeroSamples = 0
+    private var useUidRx = true
+
+    private val netSpeedTick = object : Runnable {
+        override fun run() {
+            if (!netSpeedRunning) return
+            handler.postDelayed(this, NET_SPEED_INTERVAL)
+            updateNetSpeed()
+            // 每次采样后按实时网速校准清晰度上限（升档 / 降档都在这里决策）
+            applyAdaptiveQuality()
+        }
+    }
+
     private val hideReservationRunnable = Runnable {
         reservationCard.visibility = View.GONE
         reservationTarget = null
@@ -401,6 +443,7 @@ class MainActivity : AppCompatActivity() {
         handler.removeCallbacks(epgTick)
         handler.post(tokenTick)
         handler.postDelayed(epgTick, TICK_INTERVAL)
+        startNetSpeedUpdates()
         if (!previewAllowed()) releasePreviewPlayer()
     }
 
@@ -417,11 +460,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        stopNetSpeedUpdates()
         handler.removeCallbacks(tokenTick)
         handler.removeCallbacks(epgTick)
         handler.removeCallbacks(menuLongPressRunnable)
         handler.removeCallbacks(hideInfoCardRunnable)
-        handler.removeCallbacks(hideOverlayRunnable)
         // 这里不要重置 menuLongPressFired：长按打开设置页后，抬键事件可能落到本页，
         // 提前清掉会被误判成短按而重新呼出信息栏；改由 onKeyUp / onResume 复位。
         // 切后台时清掉未确认的台号，避免 2.5 秒后在后台偷偷换台
@@ -449,9 +492,6 @@ class MainActivity : AppCompatActivity() {
         emptyHint = findViewById(R.id.emptyHint)
 
         playerView = findViewById(R.id.playerView)
-        infoPanel = findViewById(R.id.infoPanel)
-        channelNameView = findViewById(R.id.channelName)
-        channelMetaView = findViewById(R.id.channelMeta)
         statusView = findViewById(R.id.playbackStatus)
         hintView = findViewById(R.id.hintBar)
         loadingView = findViewById(R.id.loadingView)
@@ -463,11 +503,13 @@ class MainActivity : AppCompatActivity() {
         channelInfoCard = findViewById(R.id.channelInfoCard)
         infoNumberView = findViewById(R.id.infoNumber)
         infoNameView = findViewById(R.id.infoName)
+        infoMetaView = findViewById(R.id.infoMeta)
         infoGroupView = findViewById(R.id.infoGroup)
         infoProgramView = findViewById(R.id.infoProgram)
         infoNextView = findViewById(R.id.infoNext)
         infoExtraView = findViewById(R.id.infoExtra)
         infoTimeView = findViewById(R.id.infoTime)
+        infoNetSpeedView = findViewById(R.id.infoNetSpeed)
         reservationCard = findViewById(R.id.reservationCard)
 
         bottomInfoBar = findViewById(R.id.bottomInfoBar)
@@ -532,10 +574,14 @@ class MainActivity : AppCompatActivity() {
             when (playbackState) {
                 Player.STATE_BUFFERING -> {
                     if (mode == MODE_PLAYER) loadingView.visibility = View.VISIBLE
+                    // 1.9.5：连续缓冲 2 秒仍未恢复 → 先降清晰度重试，最低档仍卡才切源 / 重连
+                    scheduleStallCheck()
                 }
                 Player.STATE_READY -> {
+                    cancelStallCheck()
                     loadingView.visibility = View.GONE
                     errorView.visibility = View.GONE
+                    setPlaybackStatus(null)
                     // 这条线路能播，记下来，下次起播直接用它
                     lineSwitches = 0
                     playbackFailures = 0
@@ -544,9 +590,11 @@ class MainActivity : AppCompatActivity() {
                     currentChannel?.let { prefs.setLineIndex(it.stableKey(), currentLineIndex) }
                 }
                 Player.STATE_ENDED -> {
+                    cancelStallCheck()
                     loadingView.visibility = View.GONE
                     if (allChannels.size > 1) playNeighbor(1)
                 }
+                Player.STATE_IDLE -> cancelStallCheck()
                 else -> Unit
             }
         }
@@ -589,6 +637,11 @@ class MainActivity : AppCompatActivity() {
                 audioSwitchPending = true
                 nowPlayingChip.text = "● ${channel.name} · 音轨设备不支持，切换线路找有声源…"
                 nowPlayingChip.visibility = View.VISIBLE
+                // 播放态墙面是隐藏的，提示必须落到合并后的信息卡状态行才看得见
+                if (mode == MODE_PLAYER) {
+                    showPlayerOverlay()
+                    setPlaybackStatus("音轨不支持 · 正在切换线路…")
+                }
                 handler.postDelayed({
                     audioSwitchPending = false
                     if (!isFinishing) switchLine(1, silent = true)
@@ -635,6 +688,10 @@ class MainActivity : AppCompatActivity() {
                 lineSwitches++
                 nowPlayingChip.text = "● ${channel.name} · 线路失败，切换备用源…"
                 nowPlayingChip.visibility = View.VISIBLE
+                if (mode == MODE_PLAYER) {
+                    showPlayerOverlay()
+                    setPlaybackStatus("线路失败 · 正在切换备用源…")
+                }
                 errorView.visibility = View.GONE
                 if (mode == MODE_PLAYER) loadingView.visibility = View.VISIBLE
                 handler.postDelayed({
@@ -673,6 +730,7 @@ class MainActivity : AppCompatActivity() {
 
             if (mode == MODE_PLAYER) {
                 errorView.visibility = View.VISIBLE
+                setPlaybackStatus("播放失败 · $name")
                 errorView.text = buildString {
                     append("播放失败  ")
                     append(error.errorCodeName)
@@ -714,8 +772,8 @@ class MainActivity : AppCompatActivity() {
         if (!::httpFactory.isInitialized) {
             httpFactory = DefaultHttpDataSource.Factory()
                 .setUserAgent(USER_AGENT)
-                .setConnectTimeoutMs(8000)
-                .setReadTimeoutMs(10000)
+                .setConnectTimeoutMs(5000)
+                .setReadTimeoutMs(6000)
                 .setAllowCrossProtocolRedirects(true)
         }
         // 请求头（含实时 Token）每次都重新注入，预览播放器共用同一个 factory
@@ -755,17 +813,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * 缓冲按盒子能力收敛：起播只需 0.4~0.8 秒，不再预取 50 秒内容。
-     * 老盒子封顶更小的最大缓冲，避免内存抖动；起播阈值下调让首帧更快出现。
+     * 缓冲按盒子能力收敛：1.9.5 再下调起播阈值与重缓冲阈值，首帧更快出现；
+     * 卡顿有 2 秒自动切源 / 重连兜底，不必靠预取大量内容硬扛。
+     * 老盒子封顶更小的最大缓冲，避免内存抖动。
      */
     private fun buildLoadControl(fast: Boolean): DefaultLoadControl {
         val legacy = DeviceProfile.info(this).tier != DeviceProfile.Tier.MODERN
         return DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                if (fast) 6000 else 12000,
-                if (fast) (if (legacy) 16000 else 24000) else (if (legacy) 24000 else 32000),
-                if (fast) 400 else 800,
-                if (fast) 800 else 1600
+                if (fast) 4500 else 10000,
+                if (fast) (if (legacy) 15000 else 20000) else (if (legacy) 22000 else 28000),
+                if (fast) 300 else 600,
+                if (fast) 600 else 1200
             )
             // Media3 1.4.1 的 Builder 不再暴露 backBuffer 接口，缓冲量统一由上面四个参数控制
             .setPrioritizeTimeOverSizeThresholds(true)
@@ -796,6 +855,7 @@ class MainActivity : AppCompatActivity() {
      * 不会再退化成「把 m3u8 当渐进流」导致全部黑屏。其它协议交回默认 factory 嗅探。
      */
     private fun preparePlayback(mediaItem: MediaItem, url: String) {
+        cancelStallCheck()
         val chunkless = DeviceProfile.useChunkless(this)
         if (isHlsUrl(url)) {
             val source = HlsMediaSource.Factory(dataSourceFactory)
@@ -809,20 +869,24 @@ class MainActivity : AppCompatActivity() {
             player.setMediaItem(mediaItem)
             Diagnostics.log(this, "PLAY", "起播(渐进) ${url.take(140)} · chunkless=$chunkless")
         }
-        player.prepare()
+        // 先给 playWhenReady 再 prepare：少一次播放状态切换，首帧更快出现。
         // 墙面模式（后台续播关闭时）不自动出声出画，避免又占一路解码器
         player.playWhenReady = mode == MODE_PLAYER && !userPaused
+        player.prepare()
     }
 
-    /** 画质设置：限制视频轨道上限，或强制选 HLS 最高码率 */
+    /** 画质设置：限制视频轨道上限，或强制选 HLS 最高码率；自动档的码率上限由实时网速动态接管 */
     private fun applyTrackParameters() {
         if (!::trackSelector.isInitialized) return
+        adaptiveBitrateCap = -1
+        adaptiveUpgradeSamples = 0
         val builder = trackSelector.buildUponParameters()
+            .setMaxVideoBitrate(Int.MAX_VALUE) // 先清掉上一次的网速自适应上限
             .setForceHighestSupportedBitrate(prefs.quality == Prefs.QUALITY_HIGHEST)
             .setAllowVideoMixedMimeTypeAdaptiveness(true)
         when (prefs.quality) {
-            // 自动档：新盒子不设上限，让 HLS 自适应挑到最高可用清晰度；
-            // 老盒子硬解 4K 极易卡死，按设备能力封顶 1080p 保流畅。
+            // 自动档：带宽充足时不人为压低清晰度，让 HLS ABR 挑到源提供的最高质量；
+            // 老盒子硬解 4K 极易卡死，按设备能力封顶 1080p；码率上限由 applyAdaptiveQuality() 按实时网速接管。
             Prefs.QUALITY_AUTO -> {
                 if (DeviceProfile.info(this).tier != DeviceProfile.Tier.MODERN) {
                     builder.setMaxVideoSize(1920, 1080)
@@ -843,6 +907,165 @@ class MainActivity : AppCompatActivity() {
         }
         trackSelector.setParameters(builder)
     }
+
+    // ------------------------------------------------------------ 卡顿兜底 / 网速自适应
+
+    /** 进入缓冲就排队 2 秒检查；恢复播放 / 换台 / 暂停时取消 */
+    private fun scheduleStallCheck() {
+        if (stallCheckPending || userPaused || mode != MODE_PLAYER) return
+        stallCheckPending = true
+        handler.removeCallbacks(stallCheckRunnable)
+        handler.postDelayed(stallCheckRunnable, STALL_SWITCH_DELAY)
+    }
+
+    private fun cancelStallCheck() {
+        stallCheckPending = false
+        handler.removeCallbacks(stallCheckRunnable)
+    }
+
+    /**
+     * 连续缓冲超过 2 秒的分级处理（1.9.5）：
+     * ① 还能降清晰度 → 先降一档码率上限，留在本线路继续播（网速恢复后自适应会再升回去）；
+     * ② 已到最低档仍卡 → 切换下一条备用线路；
+     * ③ 单线路 / 已试完 → 回到直播边缘重连。
+     * 降级冷却 4 秒、换源冷却 15 秒 + switchLinePending 去重，避免与 onPlayerError 叠加反复起播。
+     */
+    private fun onPlaybackStalled() {
+        stallCheckPending = false
+        if (isFinishing || mode != MODE_PLAYER || userPaused) return
+        if (!::player.isInitialized || player.playbackState != Player.STATE_BUFFERING) return
+        val channel = currentChannel ?: return
+        val now = SystemClock.elapsedRealtime()
+        val lines = channel.allUrls().size
+
+        // ① 优先降清晰度：留在本线路重试，给低码率一个恢复机会
+        if (tryDowngradeQualityOnStall(now)) {
+            Diagnostics.log(
+                this, "STALL",
+                "缓冲超过 2s · 降清晰度重试 | ${channel.name} | 线路=${currentLineIndex + 1}/$lines | " +
+                    "上限=${bitrateCapLabel(adaptiveBitrateCap)} | 网速=${formatNetSpeed(smoothedBps)}"
+            )
+            showPlayerOverlay()
+            setPlaybackStatus("卡顿超 2 秒 · 已降低清晰度重试…")
+            // 若 2 秒后仍在缓冲，继续走下一档（更低的码率或换源）
+            scheduleStallCheck()
+            return
+        }
+
+        // ② 清晰度已到最低（或用户手动锁定画质档）仍卡 → 换源
+        if (now - lastStallSwitchMs < STALL_SWITCH_COOLDOWN) return
+        lastStallSwitchMs = now
+        Diagnostics.log(
+            this, "STALL",
+            "缓冲超过 2s · 最低清晰度仍卡，切换线路 | ${channel.name} | " +
+                "线路=${currentLineIndex + 1}/$lines | 网速=${formatNetSpeed(smoothedBps)}"
+        )
+        if (switchLinePending) return
+
+        if (prefs.autoSwitchLine && lines > 1 && lineSwitches < lines - 1) {
+            lineSwitches++
+            switchLinePending = true
+            showPlayerOverlay()
+            setPlaybackStatus("卡顿超 2 秒 · 正在切换备用源…")
+            toast("最低清晰度仍卡顿，自动切换备用源")
+            handler.postDelayed({
+                switchLinePending = false
+                if (!isFinishing) switchLine(1, silent = true)
+            }, 300)
+        } else {
+            // ③ 单线路 / 已试完所有线路：回到直播边缘重连一次，比一直卡在缓冲更容易恢复
+            runCatching {
+                player.seekToDefaultPosition()
+                player.playWhenReady = true
+            }
+            showPlayerOverlay()
+            setPlaybackStatus("卡顿超 2 秒 · 正在重新连接…")
+            toast("卡顿超过 2 秒，已重新连接直播")
+        }
+    }
+
+    /**
+     * 默认画质档按实时下行网速选择「当前带宽能稳定播的最高清晰度」：
+     * 带宽充足时不设码率上限，让 HLS ABR 直接选到源提供的最高质量；
+     * 带宽不足时才按档位封顶。升档需连续 3 秒稳定，降档立即生效。
+     * 用户手动指定了 1080p / 720p / 省流等档位时完全尊重手动选择。
+     */
+    private fun applyAdaptiveQuality() {
+        if (!::trackSelector.isInitialized || !::player.isInitialized) return
+        if (prefs.quality != Prefs.QUALITY_AUTO || mode != MODE_PLAYER || userPaused) return
+        if (netSpeedSamples < 2 || smoothedBps <= 0) return
+        // 字节/秒 → bit/秒，留 25% 余量给音频、分片开销与网络波动；
+        // 参考缓慢衰减的历史峰值，避免码率被压低后测得速率变小、清晰度升不回去
+        val effectiveBps = maxOf(smoothedBps, peakBps * 0.85)
+        val safeBps = (effectiveBps * 8.0 * 0.75).toLong()
+        val target = bitrateCapFor(safeBps)
+        val current = adaptiveBitrateCap
+        if (target == current) {
+            adaptiveUpgradeSamples = 0
+            return
+        }
+        val isUpgrade = current >= 0 &&
+            (target == Int.MAX_VALUE || (current != Int.MAX_VALUE && target > current))
+        if (isUpgrade) {
+            if (++adaptiveUpgradeSamples < 3) return
+        } else {
+            adaptiveUpgradeSamples = 0
+        }
+        setAdaptiveBitrateCap(target)
+    }
+
+    private fun bitrateCapFor(bitsPerSec: Long): Int = when {
+        bitsPerSec < 1_200_000L -> 800_000
+        bitsPerSec < 2_500_000L -> 1_800_000
+        bitsPerSec < 4_500_000L -> 3_200_000
+        bitsPerSec < 8_000_000L -> 6_000_000
+        bitsPerSec < 15_000_000L -> 12_000_000
+        else -> Int.MAX_VALUE
+    }
+
+    private fun setAdaptiveBitrateCap(cap: Int) {
+        adaptiveBitrateCap = cap
+        trackSelector.setParameters(
+            trackSelector.buildUponParameters().setMaxVideoBitrate(cap)
+        )
+        Diagnostics.log(
+            this, "QUALITY",
+            "网速自适应上限 " +
+                (if (cap == Int.MAX_VALUE) "不限制（源最高清晰度）" else "${cap / 1000} kbps") +
+                " | 实测 ${formatNetSpeed(smoothedBps)}"
+        )
+    }
+
+    /**
+     * 卡顿时沿码率阶梯（3.2M → 1.8M → 800k）逐级下调一档并留在本线路重试。
+     * 返回 true 表示本次降档成功；已到最低档或用户手动锁定了画质档时返回 false，
+     * 由调用方进入换源分支。自动档网速自适应之后仍会按带宽把这档上限升回去。
+     */
+    private fun tryDowngradeQualityOnStall(now: Long): Boolean {
+        if (prefs.quality != Prefs.QUALITY_AUTO || !::trackSelector.isInitialized) return false
+        if (now - lastStallDowngradeMs < STALL_DOWNGRADE_COOLDOWN) return false
+        val current = adaptiveBitrateCap
+        val next = when {
+            // 尚未设上限（起播初期网速样本不足）：直接落到 3.2Mbps 档试
+            current < 0 -> 3_200_000
+            current == Int.MAX_VALUE || current > 3_200_000 -> 3_200_000
+            current > 1_800_000 -> 1_800_000
+            current > 800_000 -> 800_000
+            else -> return false // 已是最低档
+        }
+        lastStallDowngradeMs = now
+        adaptiveUpgradeSamples = 0
+        setAdaptiveBitrateCap(next)
+        return true
+    }
+
+    /** 码率上限的可读标签，供信息与日志使用 */
+    private fun bitrateCapLabel(cap: Int): String =
+        when {
+            cap < 0 -> "未设定"
+            cap == Int.MAX_VALUE -> "不限制"
+            else -> "${cap / 1000} kbps"
+        }
 
     /** 从设置页 / 手机后台返回时调用：画质、请求头即时生效，引擎变化即时重播 */
     private fun applyPlayerSettings() {
@@ -1324,9 +1547,8 @@ class MainActivity : AppCompatActivity() {
         channelAdapter.setCurrent(channel.url)
         updateNowPlayingChip()
 
-        channelNameView.text = channel.name
-        channelMetaView.text = metaOf(channel)
-        statusView.visibility = View.GONE
+        infoMetaView.text = metaOf(channel)
+        setPlaybackStatus(null)
         errorView.visibility = View.GONE
 
         userPaused = false
@@ -1346,7 +1568,7 @@ class MainActivity : AppCompatActivity() {
         val start = timeshiftStart
         val url = if (start != null) Catchup.build(channel, start, liveUrl) ?: liveUrl else liveUrl
         preparePlayback(buildMediaItem(url), url)
-        channelMetaView.text = metaOf(channel) + playbackSuffix(channel, start)
+        infoMetaView.text = metaOf(channel) + playbackSuffix(channel, start)
         updateInfoExtra()
     }
 
@@ -1373,7 +1595,7 @@ class MainActivity : AppCompatActivity() {
             toast("${channel.name}　${channel.lineLabel(currentLineIndex)}（${currentLineIndex + 1}/${urls.size}）")
         }
         errorView.visibility = View.GONE
-        statusView.visibility = View.GONE
+        setPlaybackStatus(null)
         startPlayback(channel)
     }
 
@@ -1407,7 +1629,7 @@ class MainActivity : AppCompatActivity() {
                 prefs.setLineIndex(channel.stableKey(), which)
                 lineSwitches = 0
                 errorView.visibility = View.GONE
-                statusView.visibility = View.GONE
+                setPlaybackStatus(null)
                 startPlayback(channel)
                 toast("已换到 ${channel.lineLabel(which)}（${which + 1}/${lines.size}）")
             }
@@ -1533,33 +1755,37 @@ class MainActivity : AppCompatActivity() {
     // ------------------------------------------------------------ 信息卡 / 节目单
 
     /**
-     * 换台信息卡：按常见 TV 播放器的信息栏组织内容 ——
-     * 频道号/分组/线路 → 频道名 → 当前节目时间段与剩余 → 当前节目名 → 下一个节目 → 时间/清晰度。
-     * showChannelInfo 在 currentChannel 赋值之前就会被调用，所以这里全部用入参 channel，
+     * 换台：显示合并后的唯一信息卡 + 底部信息栏，统一 5 秒后收起。
+     * 本函数在 currentChannel 赋值之前就会被调用，所以填充内容一律用入参 channel，
      * 不能读 currentChannel / currentLineIndex（会是上一个频道的值）。
      */
     private fun showChannelInfo(channel: Channel) {
+        showPlayerOverlay(channel)
+        showBottomInfo(channel)
+    }
+
+    /** 填充右上角唯一信息卡（尺寸仍是 280×152dp）：状态 / 频道号·线路 / 频道名 / 元信息 / 节目 / 时间·网速 */
+    private fun fillChannelInfoCard(channel: Channel) {
         val urls = channel.allUrls()
         val lineIndex = prefs.lineIndexFor(channel.stableKey())
             .coerceIn(0, (urls.size - 1).coerceAtLeast(0))
         infoNumberView.text = buildString {
             append("CH ").append(channel.number.toString().padStart(2, '0'))
-            channel.group?.takeIf { it.isNotBlank() }?.let { append("　·　").append(it) }
             if (urls.size > 1) {
                 append("　·　线路 ").append(lineIndex + 1).append("/").append(urls.size)
             }
         }
         infoNameView.text = channel.name
+        infoMetaView.text = metaOf(channel)
         updateInfoExtra()
         updateInfoProgram(channel)
-        infoTimeView.text = buildString {
-            append(SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()))
-            currentResolution?.takeIf { it.isNotBlank() }?.let { append("　·　").append(it) }
-        }
-        channelInfoCard.visibility = View.VISIBLE
-        // 左上「正在播放」、右上换台卡、底部信息栏一起显示，统一 5 秒后收起
-        showPlayerOverlay()
-        showBottomInfo(channel)
+        infoTimeView.text = clockText()
+    }
+
+    /** 卡片与底部栏共用的「当前时间 · 分辨率」，由网速采样每秒顺带刷新 */
+    private fun clockText(): String = buildString {
+        append(SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()))
+        currentResolution?.takeIf { it.isNotBlank() }?.let { append("　·　").append(it) }
     }
 
     private fun updateInfoExtra() {
@@ -1605,7 +1831,7 @@ class MainActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------ 底部频道信息栏
 
-    /** 换台时填充底部栏并显示；按钮按下、遥控器移动焦点时都会重置 8 秒隐藏计时 */
+    /** 换台时填充底部栏并显示；按钮按下、遥控器移动焦点时都会重置 5 秒隐藏计时 */
     private fun showBottomInfo(channel: Channel) {
         bindBottomLogo(channel)
 
@@ -1619,10 +1845,7 @@ class MainActivity : AppCompatActivity() {
             append("  ·  ").append(channel.lineLabel(lineIndex))
             append("  ").append(lineIndex + 1).append("/").append(urls.size)
         }
-        bottomTime.text = buildString {
-            append(SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()))
-            currentResolution?.takeIf { it.isNotBlank() }?.let { append("  ·  ").append(it) }
-        }
+        bottomTime.text = clockText()
         updateBottomProgram(channel)
         refreshBottomButtons(channel)
         bottomInfoBar.visibility = View.VISIBLE
@@ -1720,18 +1943,15 @@ class MainActivity : AppCompatActivity() {
     /** 换台 / 手动 MENU / 任意遥控器操作都重置 5 秒倒计时，静止 5 秒三处信息一起消失 */
     private fun scheduleInfoHide() {
         handler.removeCallbacks(hideInfoCardRunnable)
-        handler.removeCallbacks(hideOverlayRunnable)
         handler.postDelayed(hideInfoCardRunnable, INFO_HIDE_DELAY)
     }
 
-    /** 三处信息统一收起；手动模式自动超时时把焦点还给播放器 */
+    /** 信息卡与底部栏统一收起；手动模式自动超时时把焦点还给播放器 */
     private fun hideTransientInfo() {
         handler.removeCallbacks(hideInfoCardRunnable)
-        handler.removeCallbacks(hideOverlayRunnable)
-        if (!::infoPanel.isInitialized || !::bottomInfoBar.isInitialized) return
+        if (!::channelInfoCard.isInitialized || !::bottomInfoBar.isInitialized) return
         val wasManual = manualBottomMode
         clearManualBottomMode()
-        infoPanel.visibility = View.GONE
         hintView.visibility = View.GONE
         channelInfoCard.visibility = View.GONE
         bottomInfoBar.visibility = View.GONE
@@ -2094,10 +2314,8 @@ class MainActivity : AppCompatActivity() {
         bottomInfoBar.visibility = View.GONE
         handler.removeCallbacks(hideInfoCardRunnable)
         wallLayer.visibility = View.VISIBLE
-        handler.removeCallbacks(hideOverlayRunnable)
-        infoPanel.visibility = View.GONE
         hintView.visibility = View.GONE
-        statusView.visibility = View.GONE
+        setPlaybackStatus(null)
         errorView.visibility = View.GONE
         // 关键性能修复：回到频道墙就暂停并把全屏 SurfaceView 置 GONE，
         // 系统会销毁 surface 并释放硬件视频解码器，墙面滚动不再和直播抢资源
@@ -2115,13 +2333,12 @@ class MainActivity : AppCompatActivity() {
         if (player.isPlaying) {
             userPaused = true
             player.pause()
-            statusView.text = "已暂停    按播放键继续"
-            statusView.visibility = View.VISIBLE
+            setPlaybackStatus("已暂停 · 按播放键继续")
             showPlayerOverlay()
         } else if (currentChannel != null) {
             userPaused = false
             player.play()
-            statusView.visibility = View.GONE
+            setPlaybackStatus(null)
             showPlayerOverlay()
         }
     }
@@ -2514,12 +2731,106 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** 显示左上「正在播放」与底部操作提示，并纳入统一 5 秒倒计时 */
-    private fun showPlayerOverlay() {
-        if (!::infoPanel.isInitialized) return
-        infoPanel.visibility = View.VISIBLE
+    /** 显示右上角唯一信息卡与底部操作提示，并纳入统一 5 秒倒计时。
+     *  换台时传入 channel：此刻 currentChannel 还是上一个频道，不能读它。 */
+    private fun showPlayerOverlay(channel: Channel? = currentChannel) {
+        if (!::channelInfoCard.isInitialized) return
+        channel?.let { fillChannelInfoCard(it) }
+        channelInfoCard.visibility = View.VISIBLE
         hintView.visibility = View.VISIBLE
+        startNetSpeedUpdates()
         scheduleInfoHide()
+    }
+
+    /** 播放状态提示与元信息共用卡片里的同一行，避免叠加时挤高卡片 */
+    private fun setPlaybackStatus(text: String?) {
+        if (!::statusView.isInitialized) return
+        val show = !text.isNullOrBlank()
+        statusView.text = text.orEmpty()
+        statusView.visibility = if (show) View.VISIBLE else View.GONE
+        if (::infoMetaView.isInitialized) {
+            infoMetaView.visibility = if (show) View.GONE else View.VISIBLE
+        }
+    }
+
+    // ------------------------------------------------------------ 实时网速
+
+    /** 前台持续采样：既给信息卡显示，也作为清晰度/卡顿策略的带宽依据 */
+    private fun startNetSpeedUpdates() {
+        if (!::infoNetSpeedView.isInitialized || netSpeedRunning) return
+        netSpeedRunning = true
+        resetNetSpeedSample()
+        handler.removeCallbacks(netSpeedTick)
+        handler.postDelayed(netSpeedTick, NET_SPEED_INTERVAL)
+    }
+
+    private fun stopNetSpeedUpdates() {
+        netSpeedRunning = false
+        handler.removeCallbacks(netSpeedTick)
+        resetNetSpeedSample()
+        if (::infoNetSpeedView.isInitialized) infoNetSpeedView.text = "网速 —"
+    }
+
+    private fun resetNetSpeedSample() {
+        lastRxBytes = -1L
+        lastTotalRxBytes = -1L
+        lastRxSampleMs = 0L
+        smoothedBps = 0.0
+        peakBps = 0.0
+        netSpeedSamples = 0
+        uidRxZeroSamples = 0
+        useUidRx = true
+    }
+
+    /**
+     * 每秒取一次下行字节差值并做指数平滑。优先用本进程 UID 统计，
+     * 部分电视 ROM 的 UID 统计不含以太网 / WiFi（恒为 0），连续 2 秒检测到
+     * 全局流量在涨而 UID 没动就自动回退到全局下行统计。
+     */
+    private fun updateNetSpeed() {
+        val now = SystemClock.elapsedRealtime()
+        val total = runCatching { TrafficStats.getTotalRxBytes() }.getOrDefault(-1L)
+        val uid = runCatching { TrafficStats.getUidRxBytes(Process.myUid()) }.getOrDefault(-1L)
+        val rx = if (useUidRx && uid >= 0) uid else total
+
+        if (rx >= 0 && lastRxBytes >= 0 && now > lastRxSampleMs && rx >= lastRxBytes) {
+            val delta = rx - lastRxBytes
+            val totalDelta = if (total >= 0 && lastTotalRxBytes >= 0) total - lastTotalRxBytes else 0L
+            if (useUidRx && delta == 0L && totalDelta > 0 && ++uidRxZeroSamples >= 2) {
+                useUidRx = false
+                lastRxBytes = -1L
+                lastTotalRxBytes = total
+                lastRxSampleMs = 0L
+                smoothedBps = 0.0
+            } else {
+                if (delta > 0) uidRxZeroSamples = 0
+                val instant = delta * 1000.0 / (now - lastRxSampleMs)
+                smoothedBps = if (smoothedBps <= 0.0) instant else smoothedBps * 0.55 + instant * 0.45
+                if (smoothedBps > 0) {
+                    netSpeedSamples++
+                    // 峰值每秒只衰减 1%：码率被压低后测得的速率会跟着变小，
+                    // 记住历史峰值才能在带宽恢复后把清晰度升回去
+                    peakBps = maxOf(peakBps * 0.99, smoothedBps)
+                }
+            }
+        }
+        lastRxBytes = rx
+        lastTotalRxBytes = total
+        lastRxSampleMs = now
+
+        val speedText = "网速 " + formatNetSpeed(smoothedBps)
+        if (channelInfoCard.visibility == View.VISIBLE) {
+            infoNetSpeedView.text = speedText
+            infoTimeView.text = clockText()
+        }
+        if (bottomInfoBar.visibility == View.VISIBLE) bottomTime.text = clockText()
+    }
+
+    private fun formatNetSpeed(bytesPerSec: Double): String {
+        if (bytesPerSec < 1024.0) return "${bytesPerSec.toLong()} B/s"
+        val kb = bytesPerSec / 1024.0
+        return if (kb < 1024.0) String.format(Locale.getDefault(), "%.0f KB/s", kb)
+        else String.format(Locale.getDefault(), "%.1f MB/s", kb / 1024.0)
     }
 
     private fun metaOf(channel: Channel): String {
@@ -2533,7 +2844,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateMeta() {
         val channel = currentChannel ?: return
-        channelMetaView.text = metaOf(channel)
+        infoMetaView.text = metaOf(channel)
         updateInfoExtra()
     }
 
