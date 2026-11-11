@@ -15,3 +15,9 @@ local.properties
 keystore/
 *.jks
 keystore.properties
+
+# 本仓库不收录任何订阅 / 测试源 / 示例接口数据（避免误导，也避免私有地址误提交）
+*.m3u
+*.m3u8
+sample-*.json
+*-test-source.*

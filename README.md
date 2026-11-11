@@ -5,6 +5,8 @@
 > 当前版本 **1.9.4（versionCode 15）**，包名 `com.iptv.tvplayer`，minSdk 21 / targetSdk 34。
 > 本仓库只包含源码：编译产物与 release 签名密钥按 `.gitignore` 排除，请按「重新打包」一节自行构建 `FlysnowTV.apk`。
 > 直接装现成签名包：[Releases 发布页](https://github.com/luoyechenfei/FlysnowTV/releases)（最新为 **v1.9.4**）。
+>
+> **本仓库与 APK 均不收录、不内置任何频道源**：没有 m3u/m3u8 播放列表、没有示例订阅、没有测试流、没有内置央视频道。所有频道都由使用者自行导入订阅；文中 `https://www.example.com/...` 只是格式占位，不是可用地址。
 
 ## 版本更新记录
 
@@ -15,6 +17,7 @@
 | 历史归档 | [v1.9.3](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.3)（14）、[v1.9.2](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.2)（13）、[v1.9.1](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.1)（12）、[v1.9](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9)（11）、[v1.8](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.8)（10），保留旧包仅供回滚 |
 | 检测更新 | 设置中心 → 关于 → **检测更新**：对比 GitHub `releases/latest`，可一键下载安装 |
 | 版本发布页 | 设置中心 → 关于 → **版本发布页**：查看全部 Release 与更新说明 |
+| 仓库内容 | 仅源码与资源，**不含任何频道源 / 测试订阅 / 示例播放列表 / 内置频道**；频道全部由使用者自行导入 |
 
 > GitHub Releases 自 **v1.8** 起提供 release 签名 APK；1.1~1.7 为源码历史版本，未单独发布二进制包。App 内「检测更新」只读取 Releases 的 latest，与下文早期版本章节无关。
 
@@ -369,14 +372,11 @@ adb shell am start -n com.iptv.tvplayer/.MainActivity \
 - **节目单内收藏**（1.9.4 起）：按 `OK` 呼出节目单 → `↑↓` 选中频道 → **长按 `OK`** 收藏 / 取消收藏选中的频道。节目单**不会消失、不换台、不重置选中位置**，每行右侧 `★ / ☆` 原地实时变化；再长按一次即取消。短按 `OK` 仍是播放选中频道
 - **最近观看**：每次播放自动记录，最多 30 个，分组条出现「⏱ 最近观看」，按最近顺序排列。**1.9.2 起为启动默认分类**（有观看记录时），不必在「全部」上千频道里从头往上翻；手动选过其它分组后尊重该选择，首次使用无记录则仍进「全部」
 
-## 测试素材
+## 频道源说明
 
-| 文件 | 用途 |
-| --- | --- |
-| `sample-playlist.m3u` | 三条公开测试流，验证基本播放 |
-| `sample-api.json` | 自定义字段名的第三方 JSON 接口样例，验证字段映射 |
-
-把它们放到局域网 HTTP 服务或 NAS 上，填地址即可。
+- **不提供任何测试素材、示例播放列表或示例订阅地址。** 首次启动频道墙为空，请在「设置 → 订阅管理」或手机配置页填入自己的 `.m3u` / `.m3u8` / `.txt` / JSON 接口地址；仓库根目录也不再放置任何 `*.m3u` 文件。
+- 本项目提供的是**解析能力**（m3u、diyp `分组名,#genre#` txt、通用 JSON 字段映射、XMLTV 节目单），不提供任何频道内容。源的有效性、版权与合规性由使用者自行负责。
+- 文档中出现的 `https://www.example.com/iptv6.m3u` 等地址只用于演示填写格式，是不可用的占位符，请勿当作订阅地址导入。
 
 ## 重新打包
 
