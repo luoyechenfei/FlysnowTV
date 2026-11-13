@@ -30,13 +30,16 @@
             android:textSize="34sp"
             android:textStyle="bold" />
 
-        <!-- 台标展示框由 ChannelAdapter.applyCardSize 按卡片实际宽高动态设定：
-             不再写死 62dp，小窗口不溢出、大窗口不发虚，所有来源图标等比归一。 -->
+        <!-- 台标展示框由 ChannelAdapter.applyCardSize 按卡片实际宽高动态设定，
+             加载成功后按图片真实尺寸等比缩放（不超过框的 78%），保证显示完整不顶边；
+             clipToOutline + 圆角背景：所有路径加载的台标统一裁成圆角。 -->
         <ImageView
             android:id="@+id/channelLogo"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_gravity="center"
+            android:background="@drawable/bg_logo_clip"
+            android:clipToOutline="true"
             android:contentDescription="@null"
             android:padding="6dp"
             android:scaleType="fitCenter" />

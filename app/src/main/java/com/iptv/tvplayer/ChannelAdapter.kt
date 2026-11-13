@@ -17,7 +17,6 @@ import coil.imageLoader
 import coil.request.ErrorResult
 import coil.request.ImageRequest
 import coil.request.SuccessResult
-import coil.transform.RoundedCornersTransformation
 
 /**
  * 深色海报墙的频道卡片适配器。
@@ -177,6 +176,9 @@ class ChannelAdapter(
         /** 已应用过的卡片尺寸：相同就不重复改 LayoutParams，避免翻页时反复 requestLayout */
         private var appliedCardHeight = -1
         private var appliedCardWidth = -1
+        /** 台标展示框的实际尺寸（px），fitLogoSize 按它检测图标大小并缩放 */
+        private var boxW = 0
+        private var boxH = 0
 
         init {
             itemView.setOnClickListener {
@@ -315,6 +317,10 @@ class ChannelAdapter(
             logoView.layoutParams = FrameLayout.LayoutParams(boxW, boxH, Gravity.CENTER)
             val pad = dp(4f)
             logoView.setPadding(pad, pad, pad, pad)
+            this.boxW = boxW
+            this.boxH = boxH
+            // 卡片窗口变了：已加载的台标按新框重新检测缩放
+            fitLogoSize()
 
             val nameSp = when {
                 heightPx < dp(100f) -> 11f
@@ -328,6 +334,39 @@ class ChannelAdapter(
             }
             nameView.setTextSize(TypedValue.COMPLEX_UNIT_SP, nameSp)
             letterView.setTextSize(TypedValue.COMPLEX_UNIT_SP, letterSp)
+        }
+
+        /**
+         * 台标大小检测与缩放（1.9.6）：fitCenter 会把台标等比放大到顶满展示框，
+         * 部分大图观感上「溢出」台标槽。这里按图片真实尺寸（density 换算成 dp）检测：
+         * 显示尺寸不超过展示框的 78%，太大就等比缩小、保证完整显示且与框协调；
+         * 过小的低分辨率图最多放大 2 倍，避免严重发虚。ImageView 自身带 clipToOutline
+         * 圆角，任何路径加载的台标都会被裁成统一圆角。
+         */
+        private fun fitLogoSize() {
+            val d = logoView.drawable ?: return
+            if (boxW <= 0 || boxH <= 0) return
+            val iw = d.intrinsicWidth
+            val ih = d.intrinsicHeight
+            if (iw <= 0 || ih <= 0) return
+            val density = itemView.resources.displayMetrics.density
+            if (density <= 0f) return
+            val dw = iw / density
+            val dh = ih / density
+            val capW = boxW / density * 0.78f
+            val capH = boxH / density * 0.78f
+            var s = minOf(capW / dw, capH / dh)
+            if (s > 2f) s = 2f
+            if (s <= 0f) return
+            val w = (dw * s * density + 0.5f).toInt()
+            val h = (dh * s * density + 0.5f).toInt()
+            if (w > 0 && h > 0) {
+                // view 尺寸 = 内容尺寸 + 左右/上下 padding，保证 drawable 实际显示不超上限
+                val pl = logoView.paddingLeft
+                val pt = logoView.paddingTop
+                logoView.layoutParams = FrameLayout.LayoutParams(
+                    w + pl * 2, h + pt * 2, Gravity.CENTER)
+            }
         }
 
         fun bind(channel: Channel, isCurrent: Boolean) {
@@ -388,14 +427,19 @@ class ChannelAdapter(
                     letterView.visibility = View.VISIBLE
                 }
                 is Int -> {
-                    // 内置台标也统一走圆角 + 统一解码尺寸，与网络台标保持一致的观感
+                    // 内置台标也统一解码尺寸，与网络台标保持一致的观感；
+                    // 圆角由 clipToOutline 统一裁剪，大小由 fitLogoSize 检测缩放
                     logoView.setImageDrawable(null)
                     letterView.visibility = View.GONE
                     val request = ImageRequest.Builder(itemView.context)
                         .data(logoData)
                         .size(320, 160)
-                        .transformations(RoundedCornersTransformation(16f))
                         .target(logoView)
+                        .listener(object : ImageRequest.Listener {
+                            override fun onSuccess(request: ImageRequest, result: SuccessResult) {
+                                if (logoView.tag == tag) fitLogoSize()
+                            }
+                        })
                         .build()
                     itemView.context.imageLoader.enqueue(request)
                 }
@@ -408,13 +452,15 @@ class ChannelAdapter(
                         // 统一解码尺寸：导入源里的台标常是上千像素的大图，
                         // 限制到卡片实际需要的分辨率，省内存也减少滚动卡顿
                         .size(320, 160)
-                        // 统一圆角：把白底方图 / 直角图片裁成一致的圆角图标砖，
-                        // 收进统一的玻璃底板后视觉整齐协调
-                        .transformations(RoundedCornersTransformation(16f))
                         .target(logoView)
                         .listener(object : ImageRequest.Listener {
                             override fun onSuccess(request: ImageRequest, result: SuccessResult) {
-                                if (logoView.tag == tag) letterView.visibility = View.GONE
+                                if (logoView.tag == tag) {
+                                    letterView.visibility = View.GONE
+                                    // 检测真实尺寸：太大则等比缩小到框的 78% 以内，
+                                    // 保证显示完整、与台标槽协调
+                                    fitLogoSize()
+                                }
                             }
 
                             override fun onError(request: ImageRequest, result: ErrorResult) {
@@ -423,6 +469,7 @@ class ChannelAdapter(
                                     if (channel.logoRes != 0) {
                                         logoView.setImageResource(channel.logoRes)
                                         letterView.visibility = View.GONE
+                                        fitLogoSize()
                                     } else {
                                         letterView.visibility = View.VISIBLE
                                     }
