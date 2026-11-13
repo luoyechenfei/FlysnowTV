@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 当前分类：亮蓝液态玻璃 + 白描边 + 镜面反光，现代流媒体 Tab 高对比选中态 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#403D7BF0" />
+            <corners android:radius="20dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:centerColor="#EE4E89E6"
+                android:endColor="#E63E79D2"
+                android:startColor="#F264A8FF"
+                android:type="linear" />
+            <stroke android:width="1.5dp" android:color="#CCFFFFFF" />
+            <corners android:radius="19dp" />
+        </shape>
+    </item>
+    <item android:bottom="1dp" android:left="1dp" android:right="1dp" android:top="1dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:centerColor="#26FFFFFF"
+                android:endColor="#00FFFFFF"
+                android:startColor="#00FFFFFF"
+                android:type="linear" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+    <item android:bottom="1dp" android:left="1dp" android:right="1dp" android:top="1dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#00FFFFFF"
+                android:startColor="#47FFFFFF"
+                android:type="linear" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+</layer-list>

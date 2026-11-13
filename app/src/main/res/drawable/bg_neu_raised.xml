@@ -1,36 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 柔光拟态「凸起」面：底部柔和暗影 + 半透明主体 + 顶部一道高光。
-     不用 elevation / outlineProvider，避免老盒子 GPU 额外负担。 -->
+<!-- 液态玻璃「凸起」面：落影 + 半透明折射主体 + 色散内边 + 斜向镜面 + 顶部高光。
+     不使用 elevation / RenderEffect（后者需 API 31），老盒子也能稳定绘制。 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:left="1dp" android:top="2dp" android:right="1dp">
         <shape android:shape="rectangle">
-            <solid android:color="@color/neu_shadow" />
-            <corners android:radius="17dp" />
+            <solid android:color="@color/glass_shadow" />
+            <corners android:radius="19dp" />
         </shape>
     </item>
-    <item android:bottom="2dp">
+    <item android:bottom="3dp">
         <shape android:shape="rectangle">
             <gradient
                 android:angle="270"
-                android:endColor="@color/neu_face_bottom"
-                android:startColor="@color/neu_face_top"
+                android:centerColor="@color/glass_body_mid"
+                android:endColor="@color/glass_body_bottom"
+                android:startColor="@color/glass_body_top"
                 android:type="linear" />
-            <stroke android:width="1dp" android:color="@color/neu_stroke" />
-            <corners android:radius="16dp" />
+            <stroke android:width="1dp" android:color="@color/glass_rim" />
+            <corners android:radius="18dp" />
         </shape>
     </item>
-    <item
-        android:bottom="3dp"
-        android:left="1dp"
-        android:right="1dp"
-        android:top="1dp">
+    <item android:left="1dp" android:top="1dp" android:right="1dp" android:bottom="4dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#00000000" />
+            <stroke android:width="1dp" android:color="@color/glass_rim_inner" />
+            <corners android:radius="17dp" />
+        </shape>
+    </item>
+    <item android:left="1dp" android:top="1dp" android:right="1dp" android:bottom="4dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:centerColor="#1CFFFFFF"
+                android:endColor="#00FFFFFF"
+                android:startColor="#00FFFFFF"
+                android:type="linear" />
+            <corners android:radius="17dp" />
+        </shape>
+    </item>
+    <item android:left="1dp" android:top="1dp" android:right="1dp" android:bottom="4dp">
         <shape android:shape="rectangle">
             <gradient
                 android:angle="270"
                 android:endColor="#00FFFFFF"
-                android:startColor="@color/neu_highlight"
+                android:startColor="#3DFFFFFF"
                 android:type="linear" />
-            <corners android:radius="15dp" />
+            <corners android:radius="17dp" />
         </shape>
     </item>
 </layer-list>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 设置行：聚焦 / 按下 / 常态，全部走统一拟态面 -->
+<!-- 设置行：常态一种静蓝边框，聚焦 / 选中边框变色为亮蓝白，好区分（菜单键同款风格） -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/bg_neu_focused" android:state_focused="true" />
-    <item android:drawable="@drawable/bg_neu_pressed" android:state_pressed="true" />
-    <item android:drawable="@drawable/bg_neu_raised" />
+    <item android:drawable="@drawable/bg_setting_focused" android:state_focused="true" />
+    <item android:drawable="@drawable/bg_setting_pressed" android:state_pressed="true" />
+    <item android:drawable="@drawable/bg_setting_normal" />
 </selector>

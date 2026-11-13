@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 频道卡底部文字压层：上透下实的玻璃暗面，保证台标预览上文字仍清晰 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <gradient
         android:angle="270"
+        android:centerColor="#99153366"
         android:endColor="#F5081F42"
         android:startColor="#00000F28" />
     <corners

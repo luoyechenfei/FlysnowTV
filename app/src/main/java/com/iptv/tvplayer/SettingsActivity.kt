@@ -95,6 +95,7 @@ class SettingsActivity : AppCompatActivity() {
     override fun onDestroy() {
         // 页面退出时停掉下载线程，避免后台继续写文件 / 回调已销毁的界面
         updateCancelled = true
+        uiHandler.removeCallbacksAndMessages(null)
         runCatching { activeDownload?.disconnect() }
         runCatching { updateDialog?.dismiss() }
         updateDialog = null
@@ -486,7 +487,7 @@ class SettingsActivity : AppCompatActivity() {
                 toast("已删除接口")
             }
             .setNegativeButton(R.string.action_cancel, null)
-            .show()
+            .showFitting()
     }
 
     /** 点击某个订阅后弹出的管理菜单：编辑 / 启用停用 / 调优先级 / 校验 / 删除 */
@@ -517,7 +518,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton(R.string.action_cancel, null)
-            .show()
+            .showFitting()
     }
 
     private fun moveSource(config: SourceConfig, up: Boolean) {
@@ -547,7 +548,7 @@ class SettingsActivity : AppCompatActivity() {
                     .setTitle("校验结果 · ${config.label()}")
                     .setMessage(msg)
                     .setPositiveButton(R.string.action_close, null)
-                    .show()
+                    .showFitting()
             }
         }.start()
     }
@@ -616,7 +617,7 @@ class SettingsActivity : AppCompatActivity() {
                     .setTitle("导入结果")
                     .setMessage(summary)
                     .setPositiveButton("完成", null)
-                    .show()
+                    .showFitting()
             }
         }.start()
     }
@@ -632,7 +633,7 @@ class SettingsActivity : AppCompatActivity() {
                 Diagnostics.clear(this)
                 toast("诊断日志已清空")
             }
-            .show()
+            .showFitting()
     }
 
     /** 生成一份可直接取回的排障日志文件 */
@@ -647,7 +648,7 @@ class SettingsActivity : AppCompatActivity() {
                     "或在盒子文件管理器打开 Android/data/com.iptv.tvplayer/files/Download/"
             )
             .setPositiveButton("完成", null)
-            .show()
+            .showFitting()
     }
 
     private fun showSourceEditor(existing: SourceConfig? = null) {
@@ -811,7 +812,7 @@ class SettingsActivity : AppCompatActivity() {
                     "也可以直接用手机配置页（扫码）的「下载订阅备份」按钮获取。"
             )
             .setPositiveButton("完成", null)
-            .show()
+            .showFitting()
     }
 
     /** 导入：拉起系统文档选择器，挑一个 .json 备份文件 */
@@ -866,7 +867,7 @@ class SettingsActivity : AppCompatActivity() {
                 afterSourceAdded("已替换为 ${list.size} 个订阅")
             }
             .setNegativeButton(R.string.action_cancel, null)
-            .show()
+            .showFitting()
     }
 
 
@@ -956,7 +957,7 @@ class SettingsActivity : AppCompatActivity() {
                 toast("已清空预约")
             }
             .setNegativeButton(R.string.action_close, null)
-            .show()
+            .showFitting()
     }
 
     private fun showLibraryDialog() {
@@ -988,7 +989,7 @@ class SettingsActivity : AppCompatActivity() {
                 toast("最近观看已清空")
             }
             .setNegativeButton(R.string.action_close, null)
-            .show()
+            .showFitting()
     }
 
     // ------------------------------------------------------------ 输入弹窗
@@ -1028,7 +1029,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun showAboutDialog() {
         val version = runCatching {
             packageManager.getPackageInfo(packageName, 0).versionName
-        }.getOrNull().orEmpty().ifBlank { "1.9.5" }
+        }.getOrNull().orEmpty().ifBlank { "1.9.6" }
         val message = buildString {
             append("飞雪TV　·　Android TV 直播播放器\n")
             append("版本 ").append(version).append("\n\n")
@@ -1047,7 +1048,7 @@ class SettingsActivity : AppCompatActivity() {
             .setMessage(message)
             .setPositiveButton("关闭", null)
             .setNeutralButton("打开项目主页") { _, _ -> openUrl(repoUrl) }
-            .show()
+            .showFitting()
     }
 
     // ------------------------------------------------------------ 日志上报反馈
@@ -1061,7 +1062,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun showFeedbackDialog() {
         val version = runCatching {
             packageManager.getPackageInfo(packageName, 0).versionName
-        }.getOrNull().orEmpty().ifBlank { "1.9.5" }
+        }.getOrNull().orEmpty().ifBlank { "1.9.6" }
 
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1149,7 +1150,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("取消", null)
-            .show()
+            .showFitting()
     }
 
     private fun doShare(file: File, note: String, target: String?) {
@@ -1173,7 +1174,7 @@ class SettingsActivity : AppCompatActivity() {
                     "· 直接粘贴到微信 / QQ 发送"
             )
             .setPositiveButton("完成", null)
-            .show()
+            .showFitting()
     }
 
     // ------------------------------------------------------------ 在线更新
@@ -1201,6 +1202,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private val downloadReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            if (isFinishing || isDestroyed) return
             val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
             if (id != updateDownloadId) return
             val dm = getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager ?: return
@@ -1286,10 +1288,12 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun localVersion(): String =
-        runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull().orEmpty()
+        runCatching { packageManager.getPackageInfo(packageName, 0).versionName }
+            .getOrNull().orEmpty().ifBlank { "1.9.6" }
 
     /** 按数字段比较版本号：v1.9.1 > 1.9 > 1.8，1.10 > 1.9（支持三段版本号） */
     private fun isNewer(remote: String, local: String): Boolean {
+        if (local.isBlank()) return false
         fun numbers(s: String) = Regex("\\d+").findAll(s)
             .map { it.value.toIntOrNull() ?: 0 }.toList()
         val r = numbers(remote)
@@ -1304,6 +1308,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showUpdateResult(rel: ReleaseInfo) {
+        if (isFinishing || isDestroyed) return
         val current = localVersion()
         if (rel.tag.isBlank()) {
             showUpdateFailure(IllegalStateException("未读取到版本信息"))
@@ -1319,7 +1324,7 @@ class SettingsActivity : AppCompatActivity() {
                     if (rel.apkUrl.isNotBlank()) downloadAndInstall(rel) else openUrl(releasesUrl)
                 }
                 .setNegativeButton("查看发布页") { _, _ -> openUrl(releasesUrl) }
-                .show()
+                .showFitting()
             return
         }
         val sizeText = if (rel.apkSize > 0) {
@@ -1342,16 +1347,17 @@ class SettingsActivity : AppCompatActivity() {
             }
             .setNeutralButton("查看发布页") { _, _ -> openUrl(rel.htmlUrl) }
             .setNegativeButton("稍后", null)
-            .show()
+            .showFitting()
     }
 
     private fun showUpdateFailure(error: Throwable) {
+        if (isFinishing || isDestroyed) return
         AlertDialog.Builder(this)
             .setTitle("检测更新失败")
             .setMessage("无法连接 GitHub Releases：${error.message.orEmpty()}\n\n可直接打开发布页查看最新版本。")
             .setPositiveButton("打开 Releases") { _, _ -> openUrl(releasesUrl) }
             .setNegativeButton("关闭", null)
-            .show()
+            .showFitting()
     }
 
     /**
@@ -1514,6 +1520,7 @@ class SettingsActivity : AppCompatActivity() {
                     else -> e.message ?: "未知错误"
                 }
                 runOnUiThread {
+                    if (isFinishing || isDestroyed || updateCancelled) return@runOnUiThread
                     runCatching { dialog?.dismiss() }
                     updateDialog = null
                     showDownloadFailure(rel, message)
@@ -1579,13 +1586,14 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showDownloadFailure(rel: ReleaseInfo, message: String) {
+        if (isFinishing || isDestroyed) return
         AlertDialog.Builder(this)
             .setTitle("更新包下载失败")
             .setMessage("$message\n\n可重试 App 内下载，或改用系统下载（通知栏显示进度），也可到发布页手动下载。")
             .setPositiveButton("重试") { _, _ -> downloadAndInstall(rel) }
             .setNeutralButton("系统下载") { _, _ -> downloadWithSystemManager(rel.apkUrl) }
             .setNegativeButton("打开发布页") { _, _ -> openUrl(releasesUrl) }
-            .show()
+            .showFitting()
     }
 
     /** 兜底：部分盒子的网络栈无法直连 CDN 时，退回系统下载管理器 */
@@ -1600,7 +1608,7 @@ class SettingsActivity : AppCompatActivity() {
         try {
             val request = DownloadManager.Request(Uri.parse(apkUrl)).apply {
                 setTitle("飞雪TV 更新包")
-                setDescription("下载完成后自动弹出安装")
+                setDescription("下载完成后请点通知栏安装")
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 setMimeType("application/vnd.android.package-archive")
                 setDestinationInExternalFilesDir(
@@ -1608,13 +1616,14 @@ class SettingsActivity : AppCompatActivity() {
                 )
             }
             updateDownloadId = dm.enqueue(request)
-            toast("已改用系统下载，进度请在通知栏查看")
+            toast("已改用系统下载；留在本页会自动安装，离开请点通知栏")
         } catch (e: Exception) {
             openUrl(apkUrl)
         }
     }
 
     private fun installApk(file: File) {
+        if (isFinishing || isDestroyed) return
         try {
             val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
             val install = Intent(Intent.ACTION_VIEW).apply {
@@ -1629,7 +1638,7 @@ class SettingsActivity : AppCompatActivity() {
                 .setMessage("系统未能自动打开安装界面，可到「版本发布页」下载 APK 后安装。")
                 .setPositiveButton("打开发布页") { _, _ -> openUrl(releasesUrl) }
                 .setNegativeButton("关闭", null)
-                .show()
+                .showFitting()
         }
     }
 

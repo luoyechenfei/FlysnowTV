@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 频道卡：统一柔光拟态三态（聚焦 / 正在播放 / 常态） -->
+<!-- 频道卡四态（1.9.6 透明版）：
+     卡身彻底透明，不再有蓝底 / 蓝圈；只在聚焦 / 勾选 / 播放时用一圈细描边提示状态。
+     状态顺序：已勾选+聚焦 > 聚焦 > 已勾选 > 正在播放 > 常态（全透明）。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/bg_neu_focused" android:state_focused="true" />
-    <item android:drawable="@drawable/bg_neu_selected" android:state_selected="true" />
-    <item android:drawable="@drawable/bg_neu_raised" />
+    <item android:drawable="@drawable/bg_card_ring_checked_focus"
+          android:state_activated="true" android:state_focused="true" />
+    <item android:drawable="@drawable/bg_card_ring_focus" android:state_focused="true" />
+    <item android:drawable="@drawable/bg_card_ring_checked" android:state_activated="true" />
+    <item android:drawable="@drawable/bg_card_ring_playing" android:state_selected="true" />
+    <item android:drawable="@android:color/transparent" />
 </selector>

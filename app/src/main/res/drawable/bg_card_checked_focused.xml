@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 多选「已勾选 + 遥控器聚焦」：比普通勾选态多一圈纯白发光边和顶部镜面高光，
+     10 米电视距离下也能一眼看出当前焦点卡片。 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#805B9BFF" />
+            <corners android:radius="20dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:centerColor="#D64B8AE4"
+                android:endColor="#C62A62B8"
+                android:startColor="#E66FB6FF"
+                android:type="linear" />
+            <stroke android:width="3dp" android:color="#FFFFFFFF" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+    <item android:bottom="2dp" android:left="2dp" android:right="2dp" android:top="2dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:centerColor="#38FFFFFF"
+                android:endColor="#00FFFFFF"
+                android:startColor="#00FFFFFF"
+                android:type="linear" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+    <item android:bottom="2dp" android:left="2dp" android:right="2dp" android:top="2dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#00FFFFFF"
+                android:startColor="#59FFFFFF"
+                android:type="linear" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+</layer-list>

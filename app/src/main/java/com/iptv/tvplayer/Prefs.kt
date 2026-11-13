@@ -427,4 +427,17 @@ class Prefs(context: Context) {
     }
 
     fun clearRecent() = writeStringSet(KEY_RECENT, emptyList())
+
+    /** 删除一条或多条最近观看记录（墙面「管理记录」的单选 / 多选 / 全选删除） */
+    fun removeRecent(keys: Collection<String>) {
+        if (keys.isEmpty()) return
+        val set = readStringSet(KEY_RECENT)
+        var changed = false
+        for (key in keys) {
+            if (set.remove(key)) changed = true
+        }
+        if (changed) writeStringSet(KEY_RECENT, set)
+    }
+
+    fun removeRecent(key: String) = removeRecent(setOf(key))
 }

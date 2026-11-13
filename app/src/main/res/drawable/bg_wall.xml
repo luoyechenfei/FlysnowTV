@@ -1,11 +1,70 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 频道墙主背景：自上而下的主流深蓝渐变，顶部保留一道蓝色光晕，避免整体发黑 -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <gradient
-        android:angle="270"
-        android:centerColor="#103474"
-        android:endColor="#0B2658"
-        android:startColor="#1D58A6"
-        android:type="linear" />
-</shape>
+<!-- 1.9.6 液态玻璃：深蓝底不再是平铺渐变，而是多处环境光源 + 斜向镜面反光 +
+     边缘压暗。上层半透明玻璃卡片因此有「折射到光」的层次，而不是一块蓝布。 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:centerColor="#103474"
+                android:endColor="#081F4C"
+                android:startColor="#1D58A6"
+                android:type="linear" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:centerColor="#1A3E96FF"
+                android:centerX="0.16"
+                android:centerY="0.08"
+                android:endColor="#00000000"
+                android:gradientRadius="1000dp"
+                android:startColor="#4D3E96FF"
+                android:type="radial" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:centerColor="#12246BFF"
+                android:centerX="0.88"
+                android:centerY="0.88"
+                android:endColor="#00000000"
+                android:gradientRadius="900dp"
+                android:startColor="#337A5CFF"
+                android:type="radial" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:centerX="0.84"
+                android:centerY="0.14"
+                android:endColor="#00000000"
+                android:gradientRadius="620dp"
+                android:startColor="#2BFFB65A"
+                android:type="radial" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:centerColor="#0EFFFFFF"
+                android:endColor="#00FFFFFF"
+                android:startColor="#00FFFFFF"
+                android:type="linear" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="90"
+                android:centerColor="#00000000"
+                android:endColor="#00000000"
+                android:startColor="#59041030"
+                android:type="linear" />
+        </shape>
+    </item>
+</layer-list>

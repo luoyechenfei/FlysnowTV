@@ -1,17 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 左侧节目单抽屉：只圆右侧两角，半透明拟态面 + 顶部高光 -->
+<!-- 左侧节目单抽屉：只圆右侧两角，液态玻璃面 + 右缘色散边 + 斜向镜面 + 顶部高光 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:bottom="2dp" android:top="2dp">
         <shape android:shape="rectangle">
             <gradient
                 android:angle="270"
+                android:centerColor="#D4163E7E"
                 android:endColor="#E00B2C60"
                 android:startColor="#CC1D4C92"
                 android:type="linear" />
-            <stroke android:width="1dp" android:color="@color/neu_stroke" />
+            <stroke android:width="1dp" android:color="@color/glass_rim" />
             <corners
                 android:bottomRightRadius="24dp"
                 android:topRightRadius="24dp" />
+        </shape>
+    </item>
+    <item android:bottom="4dp" android:left="1dp" android:right="2dp" android:top="3dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:centerColor="#1AFFFFFF"
+                android:endColor="#00FFFFFF"
+                android:startColor="#00FFFFFF"
+                android:type="linear" />
+            <corners
+                android:bottomRightRadius="22dp"
+                android:topRightRadius="22dp" />
         </shape>
     </item>
     <item android:bottom="4dp" android:left="1dp" android:right="1dp" android:top="3dp">
@@ -19,7 +33,7 @@
             <gradient
                 android:angle="270"
                 android:endColor="#00FFFFFF"
-                android:startColor="#1FFFFFFF"
+                android:startColor="#26FFFFFF"
                 android:type="linear" />
             <corners
                 android:bottomRightRadius="22dp"

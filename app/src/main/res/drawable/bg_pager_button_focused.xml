@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 遥控器聚焦 / 选中：亮蓝液态玻璃 + 纯白描边 + 外发光 + 顶部高光 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#665B9BFF" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:centerColor="#EE5595EE"
+                android:endColor="#E64A86E8"
+                android:startColor="#F26FB6FF"
+                android:type="linear" />
+            <stroke android:width="2dp" android:color="#FFFFFFFF" />
+            <corners android:radius="13dp" />
+        </shape>
+    </item>
+    <item android:bottom="1dp" android:left="1dp" android:right="1dp" android:top="1dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:centerColor="#2BFFFFFF"
+                android:endColor="#00FFFFFF"
+                android:startColor="#00FFFFFF"
+                android:type="linear" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+    <item android:bottom="1dp" android:left="1dp" android:right="1dp" android:top="1dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#00FFFFFF"
+                android:startColor="#59FFFFFF"
+                android:type="linear" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+</layer-list>

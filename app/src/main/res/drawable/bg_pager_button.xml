@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 分页 / 管理按钮（1.9.6）：与设置按钮 / 顶部分类同一套芯片边框——
+     常态一种静蓝边框，聚焦 / 按下 / 选中时边框变色为亮蓝白，好区分。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/bg_setting_focused" android:state_pressed="true" />
+    <item android:drawable="@drawable/bg_setting_focused" android:state_focused="true" />
+    <item android:drawable="@drawable/bg_setting_focused" android:state_selected="true" />
+    <item android:drawable="@drawable/bg_setting_normal" />
+</selector>

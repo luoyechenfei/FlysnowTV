@@ -3,7 +3,7 @@
      遥控器焦点 / 鼠标点选也各有对应状态，不依赖系统焦点搜索。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_selected="true" android:drawable="@drawable/bg_bottom_button_selected" />
-    <item android:state_focused="true" android:drawable="@drawable/bg_neu_focused" />
-    <item android:state_pressed="true" android:drawable="@drawable/bg_neu_pressed" />
+    <item android:state_focused="true" android:drawable="@drawable/bg_setting_focused" />
+    <item android:state_pressed="true" android:drawable="@drawable/bg_setting_pressed" />
     <item android:drawable="@drawable/bg_bottom_button_normal" />
 </selector>

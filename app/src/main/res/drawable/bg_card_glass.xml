@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 频道卡常态面（1.9.6 去深蓝版）：原底部是深海军蓝 #33183F80，文字像压在深蓝块上；
+     改为中等偏亮的蓝玻璃，底部不再发暗，文字背景不再显「深蓝」，仍保留顶部镜面反光与高光。
+     聚焦 / 正在播放 / 已勾选仍走高对比资源，遥控器反馈不受影响。 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 主体玻璃面：上亮下略浅的中蓝玻璃，无描边、无外圈暗边 -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:centerColor="#5A8ECCBE"
+                android:endColor="#4A7EC0B4"
+                android:startColor="#6E9ED8C8"
+                android:type="linear" />
+            <corners android:radius="19dp" />
+        </shape>
+    </item>
+    <!-- 顶部斜向镜面反光 -->
+    <item android:left="1dp" android:right="1dp" android:top="1dp" android:bottom="4dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:centerColor="#14FFFFFF"
+                android:endColor="#00FFFFFF"
+                android:startColor="#00FFFFFF"
+                android:type="linear" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+    <!-- 顶部柔光高光 -->
+    <item android:left="1dp" android:right="1dp" android:top="1dp" android:bottom="4dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#00FFFFFF"
+                android:startColor="#26FFFFFF"
+                android:type="linear" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+</layer-list>

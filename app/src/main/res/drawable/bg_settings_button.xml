@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 顶部「设置 / GUIDE」按钮：扁平化，聚焦时才提亮，不再用大面积蓝紫渐变 -->
+<!-- 顶部「设置 / GUIDE」按钮：常态一种静蓝边框，聚焦边框变色为亮蓝白（菜单键同款风格） -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/bg_neu_focused" android:state_focused="true" />
-    <item android:drawable="@drawable/bg_neu_pressed" android:state_pressed="true" />
-    <item android:drawable="@drawable/bg_neu_raised" />
+    <item android:drawable="@drawable/bg_setting_focused" android:state_focused="true" />
+    <item android:drawable="@drawable/bg_setting_pressed" android:state_pressed="true" />
+    <item android:drawable="@drawable/bg_setting_normal" />
 </selector>

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 订阅源列表行：与设置行同一套拟态面 -->
+<!-- 订阅源列表行：与设置行同一套芯片边框风格——
+     常态一种静蓝边框，聚焦 / 选中边框变色为亮蓝白，好区分。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/bg_neu_focused" android:state_focused="true" />
-    <item android:drawable="@drawable/bg_neu_pressed" android:state_pressed="true" />
-    <item android:drawable="@drawable/bg_neu_raised" />
+    <item android:drawable="@drawable/bg_setting_focused" android:state_focused="true" />
+    <item android:drawable="@drawable/bg_setting_pressed" android:state_pressed="true" />
+    <item android:drawable="@drawable/bg_setting_normal" />
 </selector>

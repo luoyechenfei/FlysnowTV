@@ -2,6 +2,8 @@ package com.iptv.tvplayer
 
 import android.os.Handler
 import android.os.Looper
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -31,7 +33,9 @@ class ChannelAdapter(
     private val onFocus: (Channel?, FrameLayout?, Boolean) -> Unit,
     private val onToggleFavorite: (Channel) -> Unit,
     /** 卡片被回收：通知 MainActivity 清掉指向这个 host 的预览状态，避免复用后预览被误判为「已在播」 */
-    private val onRecycled: (FrameLayout) -> Unit
+    private val onRecycled: (FrameLayout) -> Unit,
+    /** 多选勾选数量变化：刷新首行管理条 */
+    private val onSelectionChanged: () -> Unit = {}
 ) : RecyclerView.Adapter<ChannelAdapter.CardHolder>() {
 
     companion object {
@@ -42,6 +46,14 @@ class ChannelAdapter(
     private var currentUrl: String? = null
     private val handler = Handler(Looper.getMainLooper())
 
+    /** 由 MainActivity 按墙面可用高度算出：一页恰好 3 行，卡片高度跟着屏幕自适应 */
+    private var cardHeightPx = -1
+    /** 单个卡片窗口的列宽，用于把台标展示框按窗口等比归一 */
+    private var cardWidthPx = -1
+    /** 最近观看的批量删除模式 */
+    private var selectionMode = false
+    private val selectedKeys = LinkedHashSet<String>()
+
     /**
      * 当前正在显示预览小窗的卡片宿主，由 MainActivity 在挂载/摘除时同步。
      * 用于避免 RecyclerView 复用重绑（滚动、notifyItemChanged、鼠标移动触发重排）时
@@ -49,12 +61,67 @@ class ChannelAdapter(
      */
     var activePreviewHost: FrameLayout? = null
 
-    fun submit(list: List<Channel>) {
-        // 列表内容没变就不重绘：onResume / 分组切换时避免全量 rebind 和台标重复加载
-        if (items == list) return
+    fun submit(list: List<Channel>, forceRefresh: Boolean = false) {
+        // 收藏 / 最近观看 / 隐藏状态存在 Prefs 而非 Channel 字段里，只比较列表内容会漏掉
+        // 这些外部状态变化（★ 角标不刷新）。分页路径一律强制重绑；台标由 bind() 的
+        // logoView.tag 去重，不会产生额外网络请求。
+        if (!forceRefresh && items == list) return
         items.clear()
         items.addAll(list)
+        // 翻页只换本页数据，不能清掉其他页已勾选的记录；
+        // 选中集合由 MainActivity 在筛选变化时整体重置。
         notifyDataSetChanged()
+    }
+
+    /** 改变卡片尺寸：让每页 3 行刚好铺满可用高度，台标展示框按列宽同步归一 */
+    fun setCardHeight(heightPx: Int, columnWidthPx: Int) {
+        if (heightPx <= 0 || columnWidthPx <= 0) return
+        if (heightPx == cardHeightPx && columnWidthPx == cardWidthPx) return
+        cardHeightPx = heightPx
+        cardWidthPx = columnWidthPx
+        notifyDataSetChanged()
+    }
+
+    // ---- 最近观看：单选 / 多选 / 全选 ----
+
+    fun isSelectionMode(): Boolean = selectionMode
+
+    fun selectedKeySet(): Set<String> = LinkedHashSet(selectedKeys)
+
+    fun selectedCount(): Int = selectedKeys.size
+
+    fun setSelectionMode(enabled: Boolean) {
+        if (selectionMode == enabled) return
+        selectionMode = enabled
+        if (!enabled) selectedKeys.clear()
+        notifyDataSetChanged()
+        onSelectionChanged()
+    }
+
+    fun toggleSelected(key: String) {
+        if (!selectionMode) return
+        if (!selectedKeys.remove(key)) selectedKeys.add(key)
+        val index = items.indexOfFirst { it.stableKey() == key }
+        if (index >= 0) notifyItemChanged(index)
+        onSelectionChanged()
+    }
+
+    /** allKeys 传当前筛选结果的全部 key（跨所有页），不只是当前页 */
+    fun selectAll(allKeys: Collection<String>) {
+        if (!selectionMode) return
+        selectedKeys.clear()
+        selectedKeys.addAll(allKeys)
+        notifyDataSetChanged()
+        onSelectionChanged()
+    }
+
+    fun invertSelection(allKeys: Collection<String>) {
+        if (!selectionMode) return
+        val inverted = allKeys.filter { it !in selectedKeys }
+        selectedKeys.clear()
+        selectedKeys.addAll(inverted)
+        notifyDataSetChanged()
+        onSelectionChanged()
     }
 
     /** 标记“正在播放”的卡片 */
@@ -82,6 +149,7 @@ class ChannelAdapter(
     }
 
     override fun onBindViewHolder(holder: CardHolder, position: Int) {
+        holder.applyCardSize(cardHeightPx, cardWidthPx)
         holder.bind(items[position], items[position].url == currentUrl)
     }
 
@@ -100,15 +168,23 @@ class ChannelAdapter(
         private val nowDot: View = itemView.findViewById(R.id.nowDot)
         private val favoriteTag: TextView = itemView.findViewById(R.id.favoriteTag)
         private val previewTag: TextView = itemView.findViewById(R.id.previewTag)
+        private val selectBadge: TextView = itemView.findViewById(R.id.selectBadge)
+        private val logoPlate: FrameLayout = itemView.findViewById(R.id.logoPlate)
         val previewHost: FrameLayout = itemView.findViewById(R.id.previewHost)
 
         private var longPressFired = false
         private var longPressRunnable: Runnable? = null
+        /** 已应用过的卡片尺寸：相同就不重复改 LayoutParams，避免翻页时反复 requestLayout */
+        private var appliedCardHeight = -1
+        private var appliedCardWidth = -1
 
         init {
             itemView.setOnClickListener {
                 val position = bindingAdapterPosition
-                if (position != RecyclerView.NO_POSITION) onSelect(items[position])
+                if (position == RecyclerView.NO_POSITION) return@setOnClickListener
+                val channel = items.getOrNull(position) ?: return@setOnClickListener
+                // 多选模式下 OK 只勾选，不播放、不收藏
+                if (selectionMode) toggleSelected(channel.stableKey()) else onSelect(channel)
             }
             itemView.setOnFocusChangeListener { view, hasFocus ->
                 view.animate().cancel()
@@ -143,8 +219,10 @@ class ChannelAdapter(
                 }
                 false
             }
-            // 自己处理长按 OK：不依赖 framework 的 long-press 跟踪，兼容各类遥控器
+            // 自己处理长按 OK：不依赖 framework 的 long-press 跟踪，兼容各类遥控器。
+            // 多选模式下完全交给普通点击，避免长按时误触发收藏。
             itemView.setOnKeyListener { _, keyCode, event ->
+                if (selectionMode) return@setOnKeyListener false
                 if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
                     when (event.action) {
                         KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) {
@@ -187,6 +265,71 @@ class ChannelAdapter(
             previewTag.visibility = View.GONE
         }
 
+        /**
+         * 一页固定 3 行：卡片高度由 MainActivity 按墙面实际可用高度算出。
+         * 内部台标板、名称条、预览窗、角标都按比例缩放；台标 ImageView 被限制在
+         * 一个固定的 1.55:1 展示框里等比 fitCenter，因此原始台标再大也不会溢出、
+         * 再小也不会只占中间一点，不同卡片窗口下观感一致。
+         */
+        fun applyCardSize(heightPx: Int, columnWidthPx: Int) {
+            if (heightPx <= 0) return
+            if (heightPx == appliedCardHeight && columnWidthPx == appliedCardWidth) return
+            appliedCardHeight = heightPx
+            appliedCardWidth = columnWidthPx
+            val density = itemView.resources.displayMetrics.density
+            fun dp(value: Float): Int = (value * density + 0.5f).toInt()
+            val lp = itemView.layoutParams as? RecyclerView.LayoutParams ?: return
+            val margin = dp(6f)
+            lp.height = heightPx
+            lp.setMargins(margin, margin, margin, margin)
+            itemView.layoutParams = lp
+            // 3 行后卡片更高：名称条相对更薄、台标板更大，避免压缩感
+            val nameHeight = (heightPx * 0.27f).toInt().coerceAtLeast(dp(28f))
+            val plateBottom = (heightPx * 0.28f).toInt().coerceAtLeast(dp(30f))
+            (nameView.layoutParams as? FrameLayout.LayoutParams)?.let {
+                it.height = nameHeight
+                nameView.layoutParams = it
+            }
+            (logoPlate.layoutParams as? FrameLayout.LayoutParams)?.let {
+                it.bottomMargin = plateBottom
+                logoPlate.layoutParams = it
+            }
+            (previewHost.layoutParams as? FrameLayout.LayoutParams)?.let {
+                it.bottomMargin = plateBottom
+                previewHost.layoutParams = it
+            }
+            (previewTag.layoutParams as? FrameLayout.LayoutParams)?.let {
+                it.bottomMargin = plateBottom + dp(2f)
+                previewTag.layoutParams = it
+            }
+            (nowDot.layoutParams as? FrameLayout.LayoutParams)?.let {
+                it.bottomMargin = plateBottom + dp(2f)
+                nowDot.layoutParams = it
+            }
+
+            // 台标板实际可用尺寸（XML 左右 12dp、顶部 12dp、底部由上面动态设定）
+            val plateH = (heightPx - dp(12f) - plateBottom).coerceAtLeast(dp(40f))
+            val plateW = (columnWidthPx - margin * 2 - dp(24f)).coerceAtLeast(dp(40f))
+            val boxH = (plateH * 0.82f).toInt().coerceAtLeast(dp(28f))
+            val boxW = minOf((plateH * 1.55f).toInt(), plateW).coerceAtLeast(dp(32f))
+            logoView.layoutParams = FrameLayout.LayoutParams(boxW, boxH, Gravity.CENTER)
+            val pad = dp(4f)
+            logoView.setPadding(pad, pad, pad, pad)
+
+            val nameSp = when {
+                heightPx < dp(100f) -> 11f
+                heightPx > dp(190f) -> 15f
+                else -> 13f
+            }
+            val letterSp = when {
+                heightPx < dp(100f) -> 24f
+                heightPx > dp(190f) -> 42f
+                else -> 34f
+            }
+            nameView.setTextSize(TypedValue.COMPLEX_UNIT_SP, nameSp)
+            letterView.setTextSize(TypedValue.COMPLEX_UNIT_SP, letterSp)
+        }
+
         fun bind(channel: Channel, isCurrent: Boolean) {
             // host 是 RecyclerView 复用的同一个对象：打上当前频道标记，MainActivity 靠它
             // 判断「这张卡是不是已经换绑给了别的频道」，避免复用后预览被当成已在播而跳过。
@@ -204,7 +347,21 @@ class ChannelAdapter(
             } else {
                 View.GONE
             }
+            // 多选删除模式：角标 + 高亮底板；与「正在播放」的 isSelected 互不干扰
+            val checked = selectionMode && selectedKeys.contains(channel.stableKey())
+            if (selectionMode) {
+                selectBadge.visibility = View.VISIBLE
+                selectBadge.text = if (checked) "✓ 已选" else "○ 选择"
+                selectBadge.setBackgroundResource(
+                    if (checked) R.drawable.bg_select_badge else R.drawable.bg_select_badge_empty
+                )
+                officialTag.visibility = View.GONE
+                favoriteTag.visibility = View.GONE
+            } else {
+                selectBadge.visibility = View.GONE
+            }
             itemView.isSelected = isCurrent
+            itemView.isActivated = checked
 
             val focused = itemView.hasFocus()
             itemView.scaleX = if (focused) 1.06f else 1f

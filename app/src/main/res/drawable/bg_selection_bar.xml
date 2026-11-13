@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 最近观看多选工具条（1.9.6）：与分页条同一套——淡蓝玻璃底 + 静蓝细边，
+     略偏蓝以区分多选态；内部按钮同走芯片边框。 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#2E2A63B4" />
+            <stroke
+                android:width="1dp"
+                android:color="#3E8FD6FF" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+    <item android:bottom="1dp" android:left="1dp" android:right="1dp" android:top="1dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#00FFFFFF"
+                android:startColor="#18FFFFFF" />
+            <corners android:radius="17dp" />
+        </shape>
+    </item>
+</layer-list>

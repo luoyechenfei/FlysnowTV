@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 「更多」分类：与常规分类统一风格，常态透明白字，选中/聚焦复用同一描边样式 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/bg_chip_focused" android:state_focused="true" />
+    <item android:drawable="@drawable/bg_chip_selected" android:state_selected="true" />
+    <item android:drawable="@android:color/transparent" />
+</selector>

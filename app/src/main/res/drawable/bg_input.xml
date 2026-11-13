@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 所有输入框：内凹拟态；聚焦时提亮并加柔光描边 -->
+<!-- 所有输入框：常态内凹深底（文字清晰）；聚焦时换成深色 + 浅蓝描边的可读态，
+     避免亮蓝填满把近白文字吃掉。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/bg_neu_focused" android:state_focused="true" />
+    <item android:drawable="@drawable/bg_input_focused" android:state_focused="true" />
     <item android:drawable="@drawable/bg_neu_inset" />
 </selector>

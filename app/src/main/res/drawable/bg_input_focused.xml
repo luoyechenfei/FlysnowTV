@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 输入框聚焦态：保持深底色，让近白文字清晰可读（不再用亮蓝填满导致看不见字），
+     仅以浅蓝细描边 + 淡高光提示聚焦，与设置按钮同款 chip 边框风格。 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:centerColor="#41246BA8"
+                android:endColor="#361D5790"
+                android:startColor="#4A2E72B4"
+                android:type="linear" />
+            <stroke
+                android:width="2dp"
+                android:color="#8FD6FF" />
+            <corners android:radius="13dp" />
+        </shape>
+    </item>
+    <item android:left="2dp" android:right="2dp" android:top="2dp" android:bottom="3dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#00FFFFFF"
+                android:startColor="#26FFFFFF" />
+            <corners android:radius="11dp" />
+        </shape>
+    </item>
+</layer-list>

@@ -1,12 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 节目单选中行：与其它拟态面统一的提亮渐变 + 柔光细边 -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <gradient
-        android:angle="270"
-        android:endColor="#D61B4C92"
-        android:startColor="#E62E64B4"
-        android:type="linear" />
-    <stroke android:width="1.5dp" android:color="#997FA6FF" />
-    <corners android:radius="13dp" />
-</shape>
+<!-- 节目单选中行：与其它液态玻璃面统一的提亮渐变 + 镜面反光 + 柔光细边 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:centerColor="#DE2562AC"
+                android:endColor="#D61B4C92"
+                android:startColor="#E62E64B4"
+                android:type="linear" />
+            <stroke android:width="1.5dp" android:color="#997FA6FF" />
+            <corners android:radius="13dp" />
+        </shape>
+    </item>
+    <item android:bottom="1dp" android:left="1dp" android:right="1dp" android:top="1dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:centerColor="#20FFFFFF"
+                android:endColor="#00FFFFFF"
+                android:startColor="#00FFFFFF"
+                android:type="linear" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+    <item android:bottom="1dp" android:left="1dp" android:right="1dp" android:top="1dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#00FFFFFF"
+                android:startColor="#33FFFFFF"
+                android:type="linear" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+</layer-list>

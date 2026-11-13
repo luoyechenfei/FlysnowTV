@@ -1,5 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 台标底板：统一内凹槽，所有来源的台标等比居中，观感一致 -->
+<!-- 台标底板（1.9.6 三次调校）：去掉撞色硬描边，改为与卡片同色系的微微内凹「台标槽」，
+     只作为台标的承托框，不再与卡片轮廓打架；不同来源台标在统一展示框里等比居中。 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/bg_neu_inset" />
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:centerColor="#3A2A5AA0"
+                android:endColor="#3D1B488C"
+                android:startColor="#33123672"
+                android:type="linear" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+    <!-- 内阴影：上缘略暗、下缘亮，造出下凹的台标槽（即“框”） -->
+    <item android:bottom="1dp" android:left="1dp" android:right="1dp" android:top="1dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#1A000020"
+                android:startColor="#00000000"
+                android:type="linear" />
+            <corners android:radius="13dp" />
+        </shape>
+    </item>
+    <!-- 顶部细高光，呼应卡片镜面反光 -->
+    <item android:bottom="2dp" android:left="1dp" android:right="1dp" android:top="1dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="90"
+                android:endColor="#00000000"
+                android:startColor="#14644A8C"
+                android:type="linear" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
 </layer-list>

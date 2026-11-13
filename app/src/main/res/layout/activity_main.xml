@@ -69,9 +69,9 @@
         android:clipChildren="false"
         android:orientation="vertical"
         android:paddingStart="44dp"
-        android:paddingTop="30dp"
+        android:paddingTop="24dp"
         android:paddingEnd="44dp"
-        android:paddingBottom="16dp">
+        android:paddingBottom="12dp">
 
         <!-- 顶部标题栏 -->
         <LinearLayout
@@ -80,22 +80,28 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <!-- 品牌标记：纯白雪花，不含任何文字 -->
+            <!-- 品牌标记：与 launcher 同款的倾斜双层 TV + 雪花玻璃徽标（1.9.6） -->
             <ImageView
-                android:layout_width="34dp"
-                android:layout_height="34dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:contentDescription="@string/app_name"
                 android:scaleType="fitCenter"
-                android:src="@drawable/ic_flat_snow" />
+                android:src="@drawable/ic_brand_tv" />
 
             <TextView
                 android:id="@+id/countView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="18dp"
+                android:layout_marginStart="14dp"
+                android:background="@drawable/bg_setting_normal"
+                android:paddingStart="12dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="6dp"
                 android:text="0 个频道"
-                android:textColor="@color/text_secondary"
-                android:textSize="12.5sp" />
+                android:textColor="@color/text_info"
+                android:textSize="12sp"
+                android:textStyle="bold" />
 
             <View
                 android:layout_width="0dp"
@@ -165,48 +171,163 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- 分组筛选 -->
+        <!-- 分组筛选：只显示屏幕能容纳的分类，其余收进末尾「更多」 -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/groupList"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
+            android:layout_marginTop="14dp"
             android:clipToPadding="false"
             android:scrollbars="none" />
 
-        <!-- 海报墙 -->
+        <!-- 频道首行：分页 / 记录管理。两条 bar 等高、同位置互斥，
+             保证任何状态下三行卡片都有完整高度、不被浮层遮挡。 -->
+        <LinearLayout
+            android:id="@+id/pagerBar"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_pager_bar"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp">
+
+            <TextView
+                android:id="@+id/btnPrevPage"
+                style="@style/PagerButton"
+                android:text="‹ 上一页" />
+
+            <TextView
+                android:id="@+id/pageInfo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="第 1 / 1 页"
+                android:textColor="@color/text_primary"
+                android:textSize="11.5sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnNextPage"
+                style="@style/PagerButton"
+                android:layout_marginStart="6dp"
+                android:text="下一页 ›" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/pageRange"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/text_muted"
+                android:textSize="10.5sp" />
+
+            <TextView
+                android:id="@+id/btnManageRecent"
+                style="@style/PagerButton"
+                android:layout_marginStart="10dp"
+                android:text="管理记录"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/selectionBar"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_selection_bar"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/selCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="已选 0 项"
+                android:textColor="@color/text_primary"
+                android:textSize="11.5sp"
+                android:textStyle="bold" />
+
+            <!-- 多选模式同样要能翻页：选中集合跨页保留，不能只勾当前这一页 -->
+            <TextView
+                android:id="@+id/btnSelPrev"
+                style="@style/PagerButton"
+                android:layout_marginStart="10dp"
+                android:text="‹ 上一页" />
+
+            <TextView
+                android:id="@+id/btnSelNext"
+                style="@style/PagerButton"
+                android:text="下一页 ›" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/btnSelAll"
+                style="@style/PagerButton"
+                android:text="全选" />
+
+            <TextView
+                android:id="@+id/btnSelInvert"
+                style="@style/PagerButton"
+                android:text="反选" />
+
+            <TextView
+                android:id="@+id/btnSelDelete"
+                style="@style/PagerButtonAccent"
+                android:text="删除所选" />
+
+            <TextView
+                android:id="@+id/btnSelCancel"
+                style="@style/PagerButton"
+                android:text="退出" />
+        </LinearLayout>
+
+        <!-- 海报墙：每页固定 3 行，卡片高度由代码按可用高度精确计算 -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/channelGrid"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             android:layout_weight="1"
             android:clipChildren="false"
             android:clipToPadding="false"
             android:overScrollMode="never"
-            android:paddingTop="10dp"
-            android:paddingBottom="10dp"
+            android:paddingTop="5dp"
+            android:paddingBottom="5dp"
             android:scrollbars="none" />
 
         <TextView
             android:id="@+id/emptyHint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="8dp"
             android:gravity="center"
             android:text="还没有频道　长按 MENU 3 秒或点右上角「设置」添加播放源"
             android:textColor="@color/text_secondary"
-            android:textSize="13sp" />
+            android:textSize="13sp"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/wallHint"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_height="0dp"
             android:gravity="center"
-            android:text="OK 播放　·　长按 OK 收藏　·　CH+/CH- 换台　·　数字键直选　·　MENU 信息栏　·　长按 MENU 设置"
             android:textColor="@color/text_muted"
-            android:textSize="11sp" />
+            android:textSize="11sp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <!-- 播放态唯一信息卡（右上角）：1.9.5 起合并原左上「正在播放」与右上换台卡。

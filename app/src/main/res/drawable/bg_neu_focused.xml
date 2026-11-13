@@ -1,35 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 遥控器聚焦态：面提亮 + 一圈柔光描边，仍然保持半透明 -->
+<!-- 遥控器聚焦态：整体点亮 + 纯白高亮边 + 蓝色外发光 + 更强镜面反光，
+     在 10 米电视距离下仍有毫不含糊的高对比选中反馈。 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:left="1dp" android:top="2dp" android:right="1dp">
         <shape android:shape="rectangle">
-            <solid android:color="@color/neu_shadow" />
-            <corners android:radius="17dp" />
+            <solid android:color="#661E6BFF" />
+            <corners android:radius="19dp" />
         </shape>
     </item>
-    <item android:bottom="2dp">
+    <item android:bottom="3dp">
         <shape android:shape="rectangle">
             <gradient
                 android:angle="270"
-                android:endColor="#D91E4C96"
-                android:startColor="#F03A78D0"
+                android:centerColor="#F24C90EA"
+                android:endColor="#E62E78D2"
+                android:startColor="#F26FB6FF"
                 android:type="linear" />
-            <stroke android:width="2dp" android:color="@color/neu_stroke_focus" />
-            <corners android:radius="16dp" />
+            <stroke android:width="2dp" android:color="@color/glass_rim_focus" />
+            <corners android:radius="18dp" />
         </shape>
     </item>
-    <item
-        android:bottom="4dp"
-        android:left="2dp"
-        android:right="2dp"
-        android:top="2dp">
+    <item android:left="1dp" android:top="1dp" android:right="1dp" android:bottom="4dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:centerColor="#33FFFFFF"
+                android:endColor="#00FFFFFF"
+                android:startColor="#00FFFFFF"
+                android:type="linear" />
+            <corners android:radius="17dp" />
+        </shape>
+    </item>
+    <item android:left="1dp" android:top="1dp" android:right="1dp" android:bottom="4dp">
         <shape android:shape="rectangle">
             <gradient
                 android:angle="270"
                 android:endColor="#00FFFFFF"
-                android:startColor="#30FFFFFF"
+                android:startColor="#66FFFFFF"
                 android:type="linear" />
-            <corners android:radius="14dp" />
+            <corners android:radius="17dp" />
         </shape>
     </item>
 </layer-list>

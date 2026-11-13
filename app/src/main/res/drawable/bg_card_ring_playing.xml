@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 频道卡「正在播放」态：不填底色，只留一圈静蓝细描边，卡身保持透明。 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#00000000" />
+            <stroke
+                android:width="1.5dp"
+                android:color="#8FD6FF" />
+            <corners android:radius="19dp" />
+        </shape>
+    </item>
+</layer-list>

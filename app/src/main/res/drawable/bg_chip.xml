@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 分组筛选 chip：统一拟态，取消实心渐变块 -->
+<!-- 分类 chip 四态（1.9.6 三次调校）：常态纯白字、无背景块、无描边；
+     选中态透明底 + 细浅蓝胶囊描边；聚焦态更亮描边。不再有实心按钮块。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/bg_neu_focused" android:state_focused="true" />
-    <item android:drawable="@drawable/bg_neu_selected" android:state_selected="true" />
-    <item android:drawable="@drawable/bg_neu_raised" />
+    <item android:drawable="@drawable/bg_chip_focused" android:state_focused="true" />
+    <item android:drawable="@drawable/bg_chip_selected" android:state_selected="true" />
+    <item android:drawable="@android:color/transparent" />
 </selector>

@@ -30,13 +30,15 @@
             android:textSize="34sp"
             android:textStyle="bold" />
 
+        <!-- 台标展示框由 ChannelAdapter.applyCardSize 按卡片实际宽高动态设定：
+             不再写死 62dp，小窗口不溢出、大窗口不发虚，所有来源图标等比归一。 -->
         <ImageView
             android:id="@+id/channelLogo"
             android:layout_width="match_parent"
-            android:layout_height="62dp"
+            android:layout_height="match_parent"
             android:layout_gravity="center"
             android:contentDescription="@null"
-            android:padding="8dp"
+            android:padding="6dp"
             android:scaleType="fitCenter" />
     </FrameLayout>
 
@@ -57,13 +59,16 @@
         android:layout_width="match_parent"
         android:layout_height="46dp"
         android:layout_gravity="bottom"
-        android:background="@drawable/bg_card_name"
         android:ellipsize="end"
-        android:gravity="bottom|start"
+        android:gravity="bottom|center_horizontal"
         android:maxLines="1"
         android:paddingStart="14dp"
         android:paddingEnd="14dp"
         android:paddingBottom="9dp"
+        android:shadowColor="#22000A1E"
+        android:shadowDx="0"
+        android:shadowDy="1"
+        android:shadowRadius="2.5"
         android:textColor="#EAF1FF"
         android:textSize="13sp"
         android:textStyle="bold" />
@@ -83,6 +88,24 @@
         android:text="官方入口"
         android:textColor="#AFCBFF"
         android:textSize="9sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/selectBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="9dp"
+        android:background="@drawable/bg_select_badge_empty"
+        android:paddingStart="9dp"
+        android:paddingTop="3dp"
+        android:paddingEnd="9dp"
+        android:paddingBottom="3dp"
+        android:text="○ 选择"
+        android:textColor="#D8E8FF"
+        android:textSize="10sp"
+        android:textStyle="bold"
         android:visibility="gone" />
 
     <TextView

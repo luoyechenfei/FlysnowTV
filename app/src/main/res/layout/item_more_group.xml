@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 「更多分类」弹窗里的分类卡片：一行 5 个，可遥控器聚焦 -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="58dp"
+    android:layout_margin="5dp"
+    android:background="@drawable/bg_more_group_card"
+    android:clickable="true"
+    android:ellipsize="end"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
+    android:gravity="center"
+    android:maxLines="2"
+    android:paddingStart="10dp"
+    android:paddingEnd="10dp"
+    android:textColor="@color/text_primary"
+    android:textSize="12.5sp"
+    android:textStyle="bold" />

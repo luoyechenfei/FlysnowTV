@@ -33,4 +33,22 @@
     <color name="icon_flat_active">#F2F7FF</color>
     <color name="text_accent_soft">#A8CCFF</color>
     <color name="text_info">#D3E2FA</color>
+
+    <!-- 1.9.6 液态玻璃：半透明折射主体 / 镜面高光 / 色散描边 / 内阴影。
+         全部保留足够 alpha，叠加在直播画面上仍保证文字可读。 -->
+    <color name="glass_body_top">#8C4C86DC</color>
+    <color name="glass_body_mid">#782E63B4</color>
+    <color name="glass_body_bottom">#66183F80</color>
+    <color name="glass_plate_top">#A04A82D8</color>
+    <color name="glass_plate_mid">#8C2A59A8</color>
+    <color name="glass_plate_bottom">#7A143B7C</color>
+    <color name="glass_rim">#59C7EBFF</color>
+    <color name="glass_rim_inner">#2E86D8FF</color>
+    <color name="glass_rim_focus">#E6FFFFFF</color>
+    <color name="glass_specular">#3DFFFFFF</color>
+    <color name="glass_specular_strong">#59FFFFFF</color>
+    <color name="glass_sheen">#1CFFFFFF</color>
+    <color name="glass_sheen_focus">#33FFFFFF</color>
+    <color name="glass_inner_shadow">#3D001430</color>
+    <color name="glass_shadow">#33000F2C</color>
 </resources>
