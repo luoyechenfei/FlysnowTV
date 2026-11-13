@@ -10,14 +10,12 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import coil.imageLoader
 import coil.request.ErrorResult
 import coil.request.ImageRequest
 import coil.request.SuccessResult
-import coil.transform.RoundedCornersTransformation
 
 /**
  * 深色海报墙的频道卡片适配器。
@@ -162,7 +160,7 @@ class ChannelAdapter(
     inner class CardHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
 
         private val letterView: TextView = itemView.findViewById(R.id.channelLetter)
-        private val logoView: ImageView = itemView.findViewById(R.id.channelLogo)
+        private val logoView: RoundedLogoView = itemView.findViewById(R.id.channelLogo)
         private val nameView: TextView = itemView.findViewById(R.id.channelName)
         private val officialTag: TextView = itemView.findViewById(R.id.officialTag)
         private val nowDot: View = itemView.findViewById(R.id.nowDot)
@@ -177,9 +175,6 @@ class ChannelAdapter(
         /** 已应用过的卡片尺寸：相同就不重复改 LayoutParams，避免翻页时反复 requestLayout */
         private var appliedCardHeight = -1
         private var appliedCardWidth = -1
-        /** 台标展示框的实际尺寸（px），fitLogoSize 按它检测图标大小并缩放 */
-        private var boxW = 0
-        private var boxH = 0
 
         init {
             itemView.setOnClickListener {
@@ -271,8 +266,8 @@ class ChannelAdapter(
         /**
          * 一页固定 3 行：卡片高度由 MainActivity 按墙面实际可用高度算出。
          * 内部台标板、名称条、预览窗、角标都按比例缩放；台标 ImageView 被限制在
-         * 一个固定的 1.55:1 展示框里等比 fitCenter，因此原始台标再大也不会溢出、
-         * 再小也不会只占中间一点，不同卡片窗口下观感一致。
+         * 一个固定的 1.55:1 展示框里，内容大小与圆角由 RoundedLogoView 显示层
+         * 自适应，原始台标再大也不会溢出，不同卡片窗口下观感一致。
          */
         fun applyCardSize(heightPx: Int, columnWidthPx: Int) {
             if (heightPx <= 0) return
@@ -318,10 +313,8 @@ class ChannelAdapter(
             logoView.layoutParams = FrameLayout.LayoutParams(boxW, boxH, Gravity.CENTER)
             val pad = dp(4f)
             logoView.setPadding(pad, pad, pad, pad)
-            this.boxW = boxW
-            this.boxH = boxH
-            // 卡片窗口变了：已加载的台标按新框重新检测缩放
-            fitLogoSize()
+            // 台标大小/圆角由 RoundedLogoView 在 onSizeChanged / setImageDrawable
+            // 两个入口自动重算（MATRIX 缩放 ≤ 框 78% + 显示层圆角），无时序依赖
 
             val nameSp = when {
                 heightPx < dp(100f) -> 11f
@@ -338,38 +331,13 @@ class ChannelAdapter(
         }
 
         /**
-         * 台标大小检测与缩放（1.9.6）：fitCenter 会把台标等比放大到顶满展示框，
-         * 部分大图观感上「溢出」台标槽。这里按图片真实尺寸（density 换算成 dp）检测：
-         * 显示尺寸不超过展示框的 78%，太大就等比缩小、保证完整显示且与框协调；
-         * 过小的低分辨率图最多放大 2 倍，避免严重发虚。圆角由 Coil 的 RoundedCornersTransformation
-         * 在 GPU 层对位图统一裁剪（网络/内置/回退全部生效，不依赖 clipToOutline）。
+         * 台标大小与圆角（1.9.8 重做）：全部由 [RoundedLogoView] 在显示层处理——
+         * MATRIX 缩放按图片真实尺寸计算，显示尺寸永远 ≤ 展示框 78%（放大封顶 2 倍），
+         * 任何来源的大图都不可能溢出；圆角由显式 ViewOutlineProvider 按【显示尺寸】裁剪
+         * （半径 ≤12dp、精确对齐内容区域、RenderThread 抗锯齿），与位图解码尺寸无关，
+         * 修复旧版「半径作用在位图上、被显示缩放缩小到肉眼不可见」以及「clipToOutline
+         * 对透明背景无效」导致的电视上直角问题。
          */
-        private fun fitLogoSize() {
-            val d = logoView.drawable ?: return
-            if (boxW <= 0 || boxH <= 0) return
-            val iw = d.intrinsicWidth
-            val ih = d.intrinsicHeight
-            if (iw <= 0 || ih <= 0) return
-            val density = itemView.resources.displayMetrics.density
-            if (density <= 0f) return
-            val dw = iw / density
-            val dh = ih / density
-            val capW = boxW / density * 0.78f
-            val capH = boxH / density * 0.78f
-            var s = minOf(capW / dw, capH / dh)
-            if (s > 2f) s = 2f
-            if (s <= 0f) return
-            val w = (dw * s * density + 0.5f).toInt()
-            val h = (dh * s * density + 0.5f).toInt()
-            if (w > 0 && h > 0) {
-                // view 尺寸 = 内容尺寸 + 左右/上下 padding，保证 drawable 实际显示不超上限
-                val pl = logoView.paddingLeft
-                val pt = logoView.paddingTop
-                logoView.layoutParams = FrameLayout.LayoutParams(
-                    w + pl * 2, h + pt * 2, Gravity.CENTER)
-            }
-        }
-
         fun bind(channel: Channel, isCurrent: Boolean) {
             // host 是 RecyclerView 复用的同一个对象：打上当前频道标记，MainActivity 靠它
             // 判断「这张卡是不是已经换绑给了别的频道」，避免复用后预览被当成已在播而跳过。
@@ -422,32 +390,21 @@ class ChannelAdapter(
             if (logoView.tag == tag) return
             logoView.tag = tag
 
-            // 圆角半径（px）：让台标位图本身带圆角，比 clipToOutline 更可靠——
-            // 跨所有 ROM、无论网络图/内置图/回退图都生效（clipToOutline 在多数 TV
-            // 系统上只对 background 生效，对 ImageView 前景图片裁剪不掉）。
-            val radiusPx = 12f * itemView.resources.displayMetrics.density
-            val rounded = RoundedCornersTransformation(radiusPx)
-
+            // 圆角与大小缩放全部由 RoundedLogoView 在显示层处理（不依赖位图变换、
+            // 不依赖 clipToOutline），网络图 / 内置资源 / 加载失败回退共用同一入口。
             when (logoData) {
                 null -> {
                     logoView.setImageDrawable(null)
                     letterView.visibility = View.VISIBLE
                 }
                 is Int -> {
-                    // 内置台标也统一解码尺寸，与网络台标保持一致的观感；
-                    // 圆角由 clipToOutline 统一裁剪，大小由 fitLogoSize 检测缩放
+                    // 内置台标也统一解码尺寸，与网络台标保持一致的观感
                     logoView.setImageDrawable(null)
                     letterView.visibility = View.GONE
                     val request = ImageRequest.Builder(itemView.context)
                         .data(logoData)
                         .size(320, 160)
-                        .transformations(rounded)
                         .target(logoView)
-                        .listener(object : ImageRequest.Listener {
-                            override fun onSuccess(request: ImageRequest, result: SuccessResult) {
-                                if (logoView.tag == tag) fitLogoSize()
-                            }
-                        })
                         .build()
                     itemView.context.imageLoader.enqueue(request)
                 }
@@ -460,35 +417,25 @@ class ChannelAdapter(
                         // 统一解码尺寸：导入源里的台标常是上千像素的大图，
                         // 限制到卡片实际需要的分辨率，省内存也减少滚动卡顿
                         .size(320, 160)
-                        .transformations(rounded)
                         .target(logoView)
                         .listener(object : ImageRequest.Listener {
                             override fun onSuccess(request: ImageRequest, result: SuccessResult) {
                                 if (logoView.tag == tag) {
                                     letterView.visibility = View.GONE
-                                    // 检测真实尺寸：太大则等比缩小到框的 78% 以内，
-                                    // 保证显示完整、与台标槽协调
-                                    fitLogoSize()
                                 }
                             }
 
                             override fun onError(request: ImageRequest, result: ErrorResult) {
                                 if (logoView.tag == tag) {
-                                    // 封面模式要求显示台标：内置台标优先（同样走 Coil + 圆角变换，
-                                    // 避免 setImageResource 直设导致圆角丢失），否则回退首字母占位
+                                    // 封面模式要求显示台标：内置台标优先（同样走 Coil），
+                                    // 否则回退首字母占位
                                     if (channel.logoRes != 0) {
                                         logoView.setImageDrawable(null)
                                         letterView.visibility = View.GONE
                                         val fb = ImageRequest.Builder(itemView.context)
                                             .data(channel.logoRes)
                                             .size(320, 160)
-                                            .transformations(rounded)
                                             .target(logoView)
-                                            .listener(object : ImageRequest.Listener {
-                                                override fun onSuccess(request: ImageRequest, result: SuccessResult) {
-                                                    if (logoView.tag == tag) fitLogoSize()
-                                                }
-                                            })
                                             .build()
                                         itemView.context.imageLoader.enqueue(fb)
                                     } else {

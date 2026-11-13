@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 台标圆角裁剪框（1.9.6）：配合 channelLogo 的 clipToOutline 使用。
-     本体全透明，只为 ImageView 提供带圆角的 outline——网络台标 / 内置台标 /
-     回退资源无论哪条路径加载，显示时都统一裁成圆角，与 14dp 台标槽底板协调。 -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="#00000000" />
-    <corners android:radius="10dp" />
-</shape>

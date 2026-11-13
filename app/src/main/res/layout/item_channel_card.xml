@@ -30,18 +30,17 @@
             android:textSize="34sp"
             android:textStyle="bold" />
 
-        <!-- 台标展示框由 ChannelAdapter.applyCardSize 按卡片实际宽高动态设定，
-             加载成功后按图片真实尺寸等比缩放（不超过框的 78%），保证显示完整不顶边；
-             圆角由 Coil 的 RoundedCornersTransformation 在 GPU 层对位图统一裁剪，
-             网络/内置/回退三条路径全部生效（比 clipToOutline 更稳，跨所有 TV ROM）。 -->
-        <ImageView
+        <!-- 台标专用 RoundedLogoView：圆角与大小全部在显示层处理——
+             MATRIX 缩放按图片真实尺寸计算，显示尺寸永远 ≤ 本框 78%（放大封顶 2 倍），
+             任何来源的大图都不可能溢出；圆角由显式 ViewOutlineProvider 按【显示尺寸】
+             裁剪（半径 ≤12dp、精确对齐内容区域），与位图解码尺寸无关、跨所有 TV ROM 生效。 -->
+        <com.iptv.tvplayer.RoundedLogoView
             android:id="@+id/channelLogo"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_gravity="center"
             android:contentDescription="@null"
-            android:padding="6dp"
-            android:scaleType="fitCenter" />
+            android:padding="6dp" />
     </FrameLayout>
 
     <!-- 预览小窗占位：整个列表只创建一个 PlayerView，聚焦时动态挂到这里。
