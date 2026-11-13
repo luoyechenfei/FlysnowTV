@@ -25,9 +25,9 @@
 | **自适应提示弹窗** | 提示 / 确认 / 选择类弹窗按**实际文字长度**测量最长行，动态设定窗口宽度、高度随内容包裹，短提示不再左右留一大片空白；带输入框 / 进度条的弹窗保持固定宽度不被挤压（1.9.6） |
 | **可维护** | App 内检测更新（对比 GitHub latest、进度下载、SHA-256 校验、一键安装）；播放诊断日志可扫码微信 / QQ 分享上报 |
 
-> 当前版本 **1.9.8（versionCode 19）**，包名 `com.iptv.tvplayer`，minSdk 21 / targetSdk 34。
+> 当前版本 **1.9.9（versionCode 20）**，包名 `com.iptv.tvplayer`，minSdk 21 / targetSdk 34。
 > 本仓库只包含源码：编译产物与 release 签名密钥按 `.gitignore` 排除，请按「重新打包」一节自行构建 `FlysnowTV.apk`。
-> 直接装现成签名包：[Releases 发布页](https://github.com/luoyechenfei/FlysnowTV/releases)（最新为 **v1.9.8**）。
+> 直接装现成签名包：[Releases 发布页](https://github.com/luoyechenfei/FlysnowTV/releases)（最新为 **v1.9.9**）。
 >
 > **本仓库与 APK 均不收录、不内置任何频道源**：没有 m3u/m3u8 播放列表、没有示例订阅、没有测试流、没有内置央视频道。所有频道都由使用者自行导入订阅；文中 `https://www.example.com/...` 只是格式占位，不是可用地址。
 
@@ -35,16 +35,25 @@
 
 | 项目 | 说明 |
 | --- | --- |
-| 当前版本 | **1.9.8（versionCode 19）** · 台标圆角/缩放改「显示层」方案（RoundedLogoView，真机复核修复）、3 行分页、一行 5 卡「更多」网格、最近观看批量删除、透明卡片 + 全局统一芯片边框 UI、系统性 bug 复查修复 |
-| 最新签名包 | [v1.9.8 Release](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.8) · `FlysnowTV.apk`（约 6.6 MB，V1 + V2 签名） |
-| 历史归档 | [v1.9.7](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.7)（18）、[v1.9.6](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.6)（17）、[v1.9.5](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.5)（16）、[v1.9.4](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.4)（15）、[v1.9.3](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.3)（14）、[v1.9.2](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.2)（13）、[v1.9.1](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.1)（12）、[v1.9](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9)（11）、[v1.8](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.8)（10），保留旧包仅供回滚 |
+| 当前版本 | **1.9.9（versionCode 20）** · 桌面图标/横幅圆角（烘焙进 PNG）、台标圆角恢复原样 + 台标完整显示修复（LogoFitView）、3 行分页、一行 5 卡「更多」网格、最近观看批量删除、透明卡片 + 全局统一芯片边框 UI、系统性 bug 复查修复 |
+| 最新签名包 | [v1.9.9 Release](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.9) · `FlysnowTV.apk`（约 6.6 MB，V1 + V2 签名） |
+| 历史归档 | [v1.9.8](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.8)（19）、[v1.9.7](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.7)（18）、[v1.9.6](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.6)（17）、[v1.9.5](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.5)（16）、[v1.9.4](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.4)（15）、[v1.9.3](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.3)（14）、[v1.9.2](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.2)（13）、[v1.9.1](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.1)（12）、[v1.9](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9)（11）、[v1.8](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.8)（10），保留旧包仅供回滚 |
 | 检测更新 | 设置中心 → 关于 → **检测更新**：对比 GitHub `releases/latest`，可一键下载安装 |
 | 版本发布页 | 设置中心 → 关于 → **版本发布页**：查看全部 Release 与更新说明 |
 | 仓库内容 | 仅源码与资源，**不含任何频道源 / 测试订阅 / 示例播放列表 / 内置频道**；频道全部由使用者自行导入 |
 
 > GitHub Releases 自 **v1.8** 起提供 release 签名 APK；1.1~1.7 为源码历史版本，未单独发布二进制包。App 内「检测更新」只读取 Releases 的 latest，与下文早期版本章节无关。
 
-### 1.9.8（versionCode 19）· 当前版本 · 台标圆角/缩放显示层方案（真机复核修复）
+### 1.9.9（versionCode 20）· 当前版本 · 桌面图标圆角 / 台标圆角恢复原样 / 台标完整显示修复
+
+| 项目 | 更新内容 |
+| --- | --- |
+| **桌面图标与横幅圆角（核心）** | 本应用图标是纯静态 PNG（无 adaptive-icon），多数电视盒子的系统桌面不会做圆形 / 圆角遮罩而是原样显示，四角不透明就是直角。本版把圆角直接烘焙进 5 个密度的 `ic_launcher.png`（半径 = 边长 22%，4 倍超采样抗锯齿、四角透明）与 Leanback 横幅 `banner.png`（16px），TV 桌面 / 应用列表 / 设置里都是圆角；生成后处理脚本 `scripts/round_launcher_corners.py` 入库可复现（幂等） |
+| **台标圆角恢复原样** | 1.9.7 / 1.9.8 给频道台标加的圆角（位图变换 / 显示层 outline 裁剪）按用户要求**全部移除**——台标按原图原样直角显示，不再有任何裁剪 |
+| **台标完整显示修复** | 1.9.8 的显示层圆角会把满铺矩形台标的四角裁掉（观感即「显示不全」）。新版 `LogoFitView` 只保留大小控制：`scaleType=MATRIX` 按图片真实尺寸等比缩放，**显示尺寸永远 ≤ 台标槽 78%**（放大封顶 2 倍防发虚），**不裁剪、完整显示**、不溢出；解码显式 `Scale.FIT`（`MATRIX` scaleType 会让 Coil 默认按 FILL 解析，语义上可能裁掉长边），网络 / 内置 / 回退三条路径全部指定 |
+| **其它** | `RoundedLogoView` 更名为 `LogoFitView`（职责只剩大小控制）；版本号升到 1.9.9（versionCode 20） |
+
+### 1.9.8（versionCode 19）· 上一版本 · 台标圆角/缩放显示层方案（真机复核修复）
 
 | 项目 | 更新内容 |
 | --- | --- |
@@ -217,6 +226,7 @@
 
 | 版本 | 主要更新 | 签名包 |
 | --- | --- | --- |
+| **1.9.8** | 台标圆角/缩放显示层方案（RoundedLogoView；1.9.9 已按用户要求移除圆角、保留完整显示缩放） | ✅ [v1.9.8](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.8) |
 | **1.9.7** | 台标圆角 GPU 方案修正（Coil RoundedCornersTransformation）、台标大小检测缩放 fitLogoSize（1.9.8 已重做为显示层方案） | ✅ [v1.9.7](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.7) |
 | **1.9.6** | 频道墙 3 行分页 + 首行翻页按钮、最近观看单选/多选/全选删除、分类条溢出「更多」一行 5 卡网格、高透液态玻璃 UI、台标归一、自适应弹窗、TV + 雪花新图标、播放稳定性与系统性 bug 复查修复（详见上表） | ✅ [v1.9.6](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.6) |
 | 1.9.5 | 左右信息卡合并为右上角一卡 + 实时网速显示、卡顿先降清晰度再换源、网速自适应画质、起播提速（详见上表） | ✅ [v1.9.5 归档](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.5) |

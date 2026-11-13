@@ -16,6 +16,7 @@ import coil.imageLoader
 import coil.request.ErrorResult
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import coil.size.Scale
 
 /**
  * 深色海报墙的频道卡片适配器。
@@ -160,7 +161,7 @@ class ChannelAdapter(
     inner class CardHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
 
         private val letterView: TextView = itemView.findViewById(R.id.channelLetter)
-        private val logoView: RoundedLogoView = itemView.findViewById(R.id.channelLogo)
+        private val logoView: LogoFitView = itemView.findViewById(R.id.channelLogo)
         private val nameView: TextView = itemView.findViewById(R.id.channelName)
         private val officialTag: TextView = itemView.findViewById(R.id.officialTag)
         private val nowDot: View = itemView.findViewById(R.id.nowDot)
@@ -313,8 +314,8 @@ class ChannelAdapter(
             logoView.layoutParams = FrameLayout.LayoutParams(boxW, boxH, Gravity.CENTER)
             val pad = dp(4f)
             logoView.setPadding(pad, pad, pad, pad)
-            // 台标大小/圆角由 RoundedLogoView 在 onSizeChanged / setImageDrawable
-            // 两个入口自动重算（MATRIX 缩放 ≤ 框 78% + 显示层圆角），无时序依赖
+            // 台标大小由 LogoFitView 在 onSizeChanged / setImageDrawable
+            // 两个入口自动重算（MATRIX 等比缩放 ≤ 框 78%、完整显示不裁剪），无时序依赖
 
             val nameSp = when {
                 heightPx < dp(100f) -> 11f
@@ -331,12 +332,9 @@ class ChannelAdapter(
         }
 
         /**
-         * 台标大小与圆角（1.9.8 重做）：全部由 [RoundedLogoView] 在显示层处理——
-         * MATRIX 缩放按图片真实尺寸计算，显示尺寸永远 ≤ 展示框 78%（放大封顶 2 倍），
-         * 任何来源的大图都不可能溢出；圆角由显式 ViewOutlineProvider 按【显示尺寸】裁剪
-         * （半径 ≤12dp、精确对齐内容区域、RenderThread 抗锯齿），与位图解码尺寸无关，
-         * 修复旧版「半径作用在位图上、被显示缩放缩小到肉眼不可见」以及「clipToOutline
-         * 对透明背景无效」导致的电视上直角问题。
+         * 台标大小（1.9.9）：由 [LogoFitView] 在显示层处理——MATRIX 等比缩放按图片
+         * 真实尺寸计算，显示尺寸永远 ≤ 展示框 78%（放大封顶 2 倍），不裁剪、完整显示；
+         * 台标圆角已按用户要求恢复原样（1.9.9 移除 1.9.7/1.9.8 的圆角方案，原样直角显示）。
          */
         fun bind(channel: Channel, isCurrent: Boolean) {
             // host 是 RecyclerView 复用的同一个对象：打上当前频道标记，MainActivity 靠它
@@ -390,8 +388,10 @@ class ChannelAdapter(
             if (logoView.tag == tag) return
             logoView.tag = tag
 
-            // 圆角与大小缩放全部由 RoundedLogoView 在显示层处理（不依赖位图变换、
-            // 不依赖 clipToOutline），网络图 / 内置资源 / 加载失败回退共用同一入口。
+            // 大小缩放由 LogoFitView 在显示层处理（完整显示、≤ 槽 78%、放大 ≤ 2 倍）；
+            // 圆角已按用户要求恢复原样（1.9.9 移除显示层裁剪，台标原样直角显示）。
+            // 解码显式 Scale.FIT：图片完整装入 320x160 内、绝不裁剪（MATRIX scaleType
+            // 会让 Coil 默认按 FILL 解析，语义上可能裁掉长边）。
             when (logoData) {
                 null -> {
                     logoView.setImageDrawable(null)
@@ -404,6 +404,7 @@ class ChannelAdapter(
                     val request = ImageRequest.Builder(itemView.context)
                         .data(logoData)
                         .size(320, 160)
+                        .scale(Scale.FIT)
                         .target(logoView)
                         .build()
                     itemView.context.imageLoader.enqueue(request)
@@ -417,6 +418,7 @@ class ChannelAdapter(
                         // 统一解码尺寸：导入源里的台标常是上千像素的大图，
                         // 限制到卡片实际需要的分辨率，省内存也减少滚动卡顿
                         .size(320, 160)
+                        .scale(Scale.FIT)
                         .target(logoView)
                         .listener(object : ImageRequest.Listener {
                             override fun onSuccess(request: ImageRequest, result: SuccessResult) {
@@ -435,6 +437,7 @@ class ChannelAdapter(
                                         val fb = ImageRequest.Builder(itemView.context)
                                             .data(channel.logoRes)
                                             .size(320, 160)
+                                            .scale(Scale.FIT)
                                             .target(logoView)
                                             .build()
                                         itemView.context.imageLoader.enqueue(fb)
