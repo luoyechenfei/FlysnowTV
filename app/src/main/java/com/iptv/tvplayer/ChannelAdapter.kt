@@ -17,6 +17,7 @@ import coil.imageLoader
 import coil.request.ErrorResult
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import coil.transform.RoundedCornersTransformation
 
 /**
  * 深色海报墙的频道卡片适配器。
@@ -340,8 +341,8 @@ class ChannelAdapter(
          * 台标大小检测与缩放（1.9.6）：fitCenter 会把台标等比放大到顶满展示框，
          * 部分大图观感上「溢出」台标槽。这里按图片真实尺寸（density 换算成 dp）检测：
          * 显示尺寸不超过展示框的 78%，太大就等比缩小、保证完整显示且与框协调；
-         * 过小的低分辨率图最多放大 2 倍，避免严重发虚。ImageView 自身带 clipToOutline
-         * 圆角，任何路径加载的台标都会被裁成统一圆角。
+         * 过小的低分辨率图最多放大 2 倍，避免严重发虚。圆角由 Coil 的 RoundedCornersTransformation
+         * 在 GPU 层对位图统一裁剪（网络/内置/回退全部生效，不依赖 clipToOutline）。
          */
         private fun fitLogoSize() {
             val d = logoView.drawable ?: return
@@ -421,6 +422,12 @@ class ChannelAdapter(
             if (logoView.tag == tag) return
             logoView.tag = tag
 
+            // 圆角半径（px）：让台标位图本身带圆角，比 clipToOutline 更可靠——
+            // 跨所有 ROM、无论网络图/内置图/回退图都生效（clipToOutline 在多数 TV
+            // 系统上只对 background 生效，对 ImageView 前景图片裁剪不掉）。
+            val radiusPx = 12f * itemView.resources.displayMetrics.density
+            val rounded = RoundedCornersTransformation(radiusPx)
+
             when (logoData) {
                 null -> {
                     logoView.setImageDrawable(null)
@@ -434,6 +441,7 @@ class ChannelAdapter(
                     val request = ImageRequest.Builder(itemView.context)
                         .data(logoData)
                         .size(320, 160)
+                        .transformations(rounded)
                         .target(logoView)
                         .listener(object : ImageRequest.Listener {
                             override fun onSuccess(request: ImageRequest, result: SuccessResult) {
@@ -452,6 +460,7 @@ class ChannelAdapter(
                         // 统一解码尺寸：导入源里的台标常是上千像素的大图，
                         // 限制到卡片实际需要的分辨率，省内存也减少滚动卡顿
                         .size(320, 160)
+                        .transformations(rounded)
                         .target(logoView)
                         .listener(object : ImageRequest.Listener {
                             override fun onSuccess(request: ImageRequest, result: SuccessResult) {
@@ -465,11 +474,23 @@ class ChannelAdapter(
 
                             override fun onError(request: ImageRequest, result: ErrorResult) {
                                 if (logoView.tag == tag) {
-                                    // 封面模式要求显示台标：内置台标优先，否则回退首字母占位
+                                    // 封面模式要求显示台标：内置台标优先（同样走 Coil + 圆角变换，
+                                    // 避免 setImageResource 直设导致圆角丢失），否则回退首字母占位
                                     if (channel.logoRes != 0) {
-                                        logoView.setImageResource(channel.logoRes)
+                                        logoView.setImageDrawable(null)
                                         letterView.visibility = View.GONE
-                                        fitLogoSize()
+                                        val fb = ImageRequest.Builder(itemView.context)
+                                            .data(channel.logoRes)
+                                            .size(320, 160)
+                                            .transformations(rounded)
+                                            .target(logoView)
+                                            .listener(object : ImageRequest.Listener {
+                                                override fun onSuccess(request: ImageRequest, result: SuccessResult) {
+                                                    if (logoView.tag == tag) fitLogoSize()
+                                                }
+                                            })
+                                            .build()
+                                        itemView.context.imageLoader.enqueue(fb)
                                     } else {
                                         letterView.visibility = View.VISIBLE
                                     }

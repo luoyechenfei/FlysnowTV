@@ -32,14 +32,13 @@
 
         <!-- 台标展示框由 ChannelAdapter.applyCardSize 按卡片实际宽高动态设定，
              加载成功后按图片真实尺寸等比缩放（不超过框的 78%），保证显示完整不顶边；
-             clipToOutline + 圆角背景：所有路径加载的台标统一裁成圆角。 -->
+             圆角由 Coil 的 RoundedCornersTransformation 在 GPU 层对位图统一裁剪，
+             网络/内置/回退三条路径全部生效（比 clipToOutline 更稳，跨所有 TV ROM）。 -->
         <ImageView
             android:id="@+id/channelLogo"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_gravity="center"
-            android:background="@drawable/bg_logo_clip"
-            android:clipToOutline="true"
             android:contentDescription="@null"
             android:padding="6dp"
             android:scaleType="fitCenter" />
