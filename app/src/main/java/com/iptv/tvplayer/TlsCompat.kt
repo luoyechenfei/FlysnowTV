@@ -14,8 +14,9 @@ import javax.net.ssl.SSLSocketFactory
  * 而几乎所有 https 直播源与接口都要求 TLS1.2。表现就是：
  * 电脑模拟器（新 WebView / 新 TLS 栈）能播，盒子握手直接失败、一个频道都出不来。
  *
- * 这里在 Application 启动时把 TLS1.2 显式打开，并挂到全局 HttpsURLConnection，
- * ExoPlayer 的 DefaultHttpDataSource 也会走这个默认 SSLSocketFactory。
+ * 这里在 Application 启动时把 TLS1.2 显式打开，并挂到全局 HttpsURLConnection。
+ * 播放链路的 OkHttp 走自己的 TLS 栈，但同样受益于此处装的 ProviderInstaller
+ * （升级安全提供器后 OkHttp 的握手也用上新 TLS 实现）。
  */
 object TlsCompat {
 

@@ -130,6 +130,8 @@ class Prefs(context: Context) {
         private const val KEY_VERSION = "version"
         private const val KEY_FAVORITES = "favorites"
         private const val KEY_RECENT = "recent"
+        /** 上次退出时正在播放的频道 stableKey：启动时直接恢复播放用（1.10） */
+        private const val KEY_LAST_PLAYED = "last_played_key"
         private const val KEY_RESERVATIONS = "reservations"
         private const val KEY_LINE_PREFIX = "line_"
         private const val KEY_HIDDEN = "hidden_channels"
@@ -427,6 +429,11 @@ class Prefs(context: Context) {
     }
 
     fun clearRecent() = writeStringSet(KEY_RECENT, emptyList())
+
+    /** 上次退出时正在播放的频道 stableKey（静默写入，不触发换源 / 版本号变化） */
+    var lastPlayedKey: String
+        get() = sp.getString(KEY_LAST_PLAYED, "").orEmpty()
+        set(value) = silentEdit { putString(KEY_LAST_PLAYED, value) }
 
     /** 删除一条或多条最近观看记录（墙面「管理记录」的单选 / 多选 / 全选删除） */
     fun removeRecent(keys: Collection<String>) {

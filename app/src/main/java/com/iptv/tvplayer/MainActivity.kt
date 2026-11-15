@@ -36,7 +36,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -51,6 +51,8 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.imageLoader
 import coil.request.ErrorResult
 import coil.request.ImageRequest
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -138,7 +140,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var errorView: TextView
 
     private lateinit var player: ExoPlayer
-    private lateinit var httpFactory: DefaultHttpDataSource.Factory
+    private lateinit var httpFactory: OkHttpDataSource.Factory
     private lateinit var dataSourceFactory: DefaultDataSource.Factory
     private lateinit var trackSelector: DefaultTrackSelector
     private lateinit var channelAdapter: ChannelAdapter
@@ -169,6 +171,8 @@ class MainActivity : AppCompatActivity() {
 
     private var allChannels: List<Channel> = emptyList()
     private var currentChannel: Channel? = null
+    /** 冷启动自动播放上次频道只做一次：换源 / 设置返回导致的重新拉源不再重播 */
+    private var autoPlayedOnLaunch = false
     private var activeGroup: String? = null
     /** 用户是否手动选过分组：手动选过之后重新拉源不再强行跳回默认分类 */
     private var userPickedGroup = false
@@ -622,7 +626,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadInitial() {
         if (repository.hasSources) {
-            reloadPlaylist()
+            reloadPlaylist(autoPlayLast = true)
         } else {
             bindChannels(emptyList())
             sourceLabelView.text = "未添加订阅"
@@ -632,6 +636,25 @@ class MainActivity : AppCompatActivity() {
                 if (!repository.hasSources && !isFinishing) openSettings()
             }, 1200)
         }
+    }
+
+    /**
+     * 冷启动自动播放上次退出时的频道（1.10）。
+     * 优先按 stableKey 精确匹配（换源 / 频道顺序变化也不丢），找不到再回退到保存的 index。
+     * 只做一次且必须是全屏播放模式，避免外部导入链接 / 设置返回等 reload 场景突然起播。
+     */
+    private fun autoPlayLastChannel() {
+        if (autoPlayedOnLaunch) return
+        autoPlayedOnLaunch = true
+        if (allChannels.isEmpty() || isFinishing || isDestroyed) return
+        val key = prefs.lastPlayedKey
+        val target = (if (key.isNotBlank()) allChannels.firstOrNull { it.stableKey() == key } else null)
+            ?: allChannels.getOrNull(repository.lastIndex)
+        if (target == null) return
+        // 上次频道若已失效隐藏则跳过，避免一进软件就播一个被隐藏的频道
+        if (prefs.hideFailedChannels && target.stableKey() in hiddenSnapshot) return
+        runCatching { playChannel(target, enterPlayer = true) }
+            .onFailure { Diagnostics.log(this, "PLAYER", "恢复上次频道失败：${it.message}") }
     }
 
     /** 按屏幕宽度决定海报墙列数：1080p 电视一般是 5 列 */
@@ -1089,11 +1112,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupPlayer() {
         if (!::httpFactory.isInitialized) {
-            httpFactory = DefaultHttpDataSource.Factory()
+            // IPv6 优先：OkHttp 数据源 + 自定义 Dns（AAAA 排在 A 前，连不通自动回退 IPv4）。
+            // 保留原有超时 / User-Agent / 跨协议重定向语义；TLS1.2 老盒子兼容由 TlsCompat
+            // 在 Application 启动时装的 ProviderInstaller / 系统栈负责。
+            val okClient = OkHttpClient.Builder()
+                .dns(Ipv6PreferredDns(this))
+                .connectTimeout(5000, TimeUnit.MILLISECONDS)
+                .readTimeout(6000, TimeUnit.MILLISECONDS)
+                .followRedirects(true)
+                .followSslRedirects(true) // 等价原 setAllowCrossProtocolRedirects(true)
+                .build()
+            httpFactory = OkHttpDataSource.Factory(okClient)
                 .setUserAgent(USER_AGENT)
-                .setConnectTimeoutMs(5000)
-                .setReadTimeoutMs(6000)
-                .setAllowCrossProtocolRedirects(true)
+            Diagnostics.log(this, "NET", "播放 DNS 策略：IPv6 优先，失败自动回退 IPv4")
         }
         // 请求头（含实时 Token）每次都重新注入，预览播放器共用同一个 factory
         httpFactory.setDefaultRequestProperties(repository.allHeaders())
@@ -1718,7 +1749,7 @@ class MainActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------ 数据
 
-    private fun reloadPlaylist(preservePage: Boolean = false) {
+    private fun reloadPlaylist(preservePage: Boolean = false, autoPlayLast: Boolean = false) {
         if (loadingSource) {
             pendingReload = true
             return
@@ -1749,6 +1780,8 @@ class MainActivity : AppCompatActivity() {
                         currentPage = savedPage.coerceIn(0, pageCount() - 1)
                         applyPage(focusFirst = false)
                     }
+                    // 冷启动：列表就绪后直接进入上次播放的频道全屏播放（只做一次）
+                    if (autoPlayLast) autoPlayLastChannel()
                 }.onFailure { error ->
                     emptyHint.visibility = View.VISIBLE
                     emptyHint.text =
@@ -1935,6 +1968,7 @@ class MainActivity : AppCompatActivity() {
             updateNowPlayingChip()
             repository.lastIndex = channel.number - 1
             prefs.recordRecent(channel.stableKey())
+            prefs.lastPlayedKey = channel.stableKey()
             return
         }
 
@@ -1960,6 +1994,7 @@ class MainActivity : AppCompatActivity() {
 
         repository.lastIndex = channel.number - 1
         prefs.recordRecent(channel.stableKey())
+        prefs.lastPlayedKey = channel.stableKey()
         if (enterPlayer) {
             enterPlayerMode()
         } else if (mode == MODE_WALL) {

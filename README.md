@@ -25,9 +25,9 @@
 | **自适应提示弹窗** | 提示 / 确认 / 选择类弹窗按**实际文字长度**测量最长行，动态设定窗口宽度、高度随内容包裹，短提示不再左右留一大片空白；带输入框 / 进度条的弹窗保持固定宽度不被挤压（1.9.6） |
 | **可维护** | App 内检测更新（对比 GitHub latest、进度下载、SHA-256 校验、一键安装）；播放诊断日志可扫码微信 / QQ 分享上报 |
 
-> 当前版本 **1.9.9（versionCode 20）**，包名 `com.iptv.tvplayer`，minSdk 21 / targetSdk 34。
+> 当前版本 **1.9.10（versionCode 21）**，包名 `com.iptv.tvplayer`，minSdk 21 / targetSdk 34。
 > 本仓库只包含源码：编译产物与 release 签名密钥按 `.gitignore` 排除，请按「重新打包」一节自行构建 `FlysnowTV.apk`。
-> 直接装现成签名包：[Releases 发布页](https://github.com/luoyechenfei/FlysnowTV/releases)（最新为 **v1.9.9**）。
+> 直接装现成签名包：[Releases 发布页](https://github.com/luoyechenfei/FlysnowTV/releases)（最新为 **v1.9.10**）。
 >
 > **本仓库与 APK 均不收录、不内置任何频道源**：没有 m3u/m3u8 播放列表、没有示例订阅、没有测试流、没有内置央视频道。所有频道都由使用者自行导入订阅；文中 `https://www.example.com/...` 只是格式占位，不是可用地址。
 
@@ -35,16 +35,24 @@
 
 | 项目 | 说明 |
 | --- | --- |
-| 当前版本 | **1.9.9（versionCode 20）** · 桌面图标/横幅圆角（烘焙进 PNG）、台标圆角恢复原样 + 台标完整显示修复（LogoFitView）、3 行分页、一行 5 卡「更多」网格、最近观看批量删除、透明卡片 + 全局统一芯片边框 UI、系统性 bug 复查修复 |
-| 最新签名包 | [v1.9.9 Release](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.9) · `FlysnowTV.apk`（约 6.6 MB，V1 + V2 签名） |
-| 历史归档 | [v1.9.8](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.8)（19）、[v1.9.7](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.7)（18）、[v1.9.6](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.6)（17）、[v1.9.5](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.5)（16）、[v1.9.4](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.4)（15）、[v1.9.3](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.3)（14）、[v1.9.2](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.2)（13）、[v1.9.1](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.1)（12）、[v1.9](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9)（11）、[v1.8](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.8)（10），保留旧包仅供回滚 |
+| 当前版本 | **1.9.10（versionCode 21）** · 播放 IPv6 优先（OkHttp 自定义 Dns，失败自动回退 IPv4）、冷启动直接播放上次退出频道、桌面图标/横幅圆角、台标原样完整显示、3 行分页、一行 5 卡「更多」网格、透明卡片 + 全局统一芯片边框 UI |
+| 最新签名包 | [v1.9.10 Release](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.10) · `FlysnowTV.apk`（约 6.7 MB，V1 + V2 签名） |
+| 历史归档 | [v1.9.9](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.9)（20）、[v1.9.8](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.8)（19）、[v1.9.7](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.7)（18）、[v1.9.6](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.6)（17）、[v1.9.5](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.5)（16）、[v1.9.4](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.4)（15）、[v1.9.3](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.3)（14）、[v1.9.2](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.2)（13）、[v1.9.1](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.1)（12）、[v1.9](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9)（11）、[v1.8](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.8)（10），保留旧包仅供回滚 |
 | 检测更新 | 设置中心 → 关于 → **检测更新**：对比 GitHub `releases/latest`，可一键下载安装 |
 | 版本发布页 | 设置中心 → 关于 → **版本发布页**：查看全部 Release 与更新说明 |
 | 仓库内容 | 仅源码与资源，**不含任何频道源 / 测试订阅 / 示例播放列表 / 内置频道**；频道全部由使用者自行导入 |
 
 > GitHub Releases 自 **v1.8** 起提供 release 签名 APK；1.1~1.7 为源码历史版本，未单独发布二进制包。App 内「检测更新」只读取 Releases 的 latest，与下文早期版本章节无关。
 
-### 1.9.9（versionCode 20）· 当前版本 · 桌面图标圆角 / 台标圆角恢复原样 / 台标完整显示修复
+### 1.9.10（versionCode 21）· 当前版本 · 播放 IPv6 优先 / 冷启动续播上次频道
+
+| 项目 | 更新内容 |
+| --- | --- |
+| **播放 IPv6 优先（核心）** | 原播放链路用 Media3 `DefaultHttpDataSource`（底层 `HttpURLConnection`），DNS 解析顺序由 ROM 决定，绝大多数盒子默认 A（IPv4）优先，即便宽带支持 IPv6 也不会用。本版改用 **OkHttp 数据源 + 自定义 `Ipv6PreferredDns`**：把 AAAA（IPv6）记录排到 A（IPv4）前，OkHttp 按返回顺序逐个尝试——**有 IPv6 优先用、连不通自动回退 IPv4**；纯 IPv4 网络（无 global IPv6 地址）直接走系统顺序，省一次徒劳超时。检测结果 30 秒缓存，网络切换后快速收敛。超时 / User-Agent / 实时 Token 头 / 跨协议重定向全部沿用原语义，老盒子 TLS1.2 由 ProviderInstaller 保证 |
+| **冷启动直接续播上次频道（核心）** | 进入软件即**直接进入上次退出时正在播放的频道全屏起播**，不必再在墙面找频道。用 `stableKey`（名称 + 地址）持久化，换源 / 频道顺序变化也不丢；找不到时回退到保存的 index；被自动隐藏的失效频道跳过。仅首次加载触发一次，导入新订阅 / 设置返回等重新拉源不会突然全屏起播 |
+| **其它** | 新增依赖 `okhttp:4.12.0` + `media3-datasource-okhttp:1.4.1`；诊断日志新增 `NET` 类记录 DNS 策略；版本号升到 1.9.10（versionCode 21） |
+
+### 1.9.9（versionCode 20）· 上一版本 · 桌面图标圆角 / 台标圆角恢复原样 / 台标完整显示修复
 
 | 项目 | 更新内容 |
 | --- | --- |
@@ -226,6 +234,8 @@
 
 | 版本 | 主要更新 | 签名包 |
 | --- | --- | --- |
+| **1.9.10** | 播放 IPv6 优先（OkHttp 自定义 Dns，失败回退 IPv4）、冷启动直接续播上次退出频道 | ✅ [v1.9.10](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.10) |
+| **1.9.9** | 桌面图标/横幅圆角、台标圆角恢复原样 + 完整显示修复（LogoFitView） | ✅ [v1.9.9](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.9) |
 | **1.9.8** | 台标圆角/缩放显示层方案（RoundedLogoView；1.9.9 已按用户要求移除圆角、保留完整显示缩放） | ✅ [v1.9.8](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.8) |
 | **1.9.7** | 台标圆角 GPU 方案修正（Coil RoundedCornersTransformation）、台标大小检测缩放 fitLogoSize（1.9.8 已重做为显示层方案） | ✅ [v1.9.7](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.7) |
 | **1.9.6** | 频道墙 3 行分页 + 首行翻页按钮、最近观看单选/多选/全选删除、分类条溢出「更多」一行 5 卡网格、高透液态玻璃 UI、台标归一、自适应弹窗、TV + 雪花新图标、播放稳定性与系统性 bug 复查修复（详见上表） | ✅ [v1.9.6](https://github.com/luoyechenfei/FlysnowTV/releases/tag/v1.9.6) |
